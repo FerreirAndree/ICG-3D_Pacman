@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { buildShowcase, showcaseLayout, createMazePiece, TILE_SIZE } from './mazePieces.js';
+import { buildShowcase, showcaseLayout, createMazePiece, createPedestal, TILE_SIZE } from './mazePieces.js';
+import { createPacman } from './entities.js';
 import './style.css';
 
 const scene = new THREE.Scene();
@@ -8,7 +9,19 @@ scene.background = new THREE.Color(0x010204);
 scene.fog = new THREE.FogExp2(0x010204, 0.009);
 
 const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 500);
-camera.position.set(36, 12.5, 49);
+
+// --- Camera Profiles ---
+const GALLERY_VIEW = {
+  pos: [-52.15, 34.87, 31.20],
+  target: [13.69, 0.00, 26.19]
+};
+
+const EDITOR_VIEW = {
+  pos: [50, 65, 120],  // Standard top-down-ish build view
+  target: [50, 0, 50]
+};
+
+camera.position.set(...GALLERY_VIEW.pos);
 
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
@@ -161,10 +174,38 @@ function createGroundGlow(radius, color, opacity) {
   return glow;
 }
 
-const showcase = buildShowcase();
+const showcase = buildShowcase(showcaseLayout);
 const editorMaze = new THREE.Group();
 scene.add(showcase);
 scene.add(editorMaze);
+
+// --- Hero Wing (Characters) ---
+const HERO_X = 17.5;
+const HERO_Z = 80;  // Moved closer
+
+// Floating Podium for Pac-man
+const heroPodium = createPedestal();
+heroPodium.position.set(HERO_X, 3.5, HERO_Z); 
+showcase.add(heroPodium);
+
+const pacman = createPacman();
+pacman.position.set(HERO_X, 7.5, HERO_Z);
+pacman.rotation.y = Math.PI / 1.4 + Math.PI / 2 + Math.PI / 12; // Extra 15 deg left
+showcase.add(pacman);
+
+// Initialize starting view
+controls.target.set(...GALLERY_VIEW.target);
+camera.position.set(...GALLERY_VIEW.pos);
+
+// --- View Capture Tool (Helper) ---
+window.getCameraConfig = () => {
+  const pos = camera.position;
+  const tar = controls.target;
+  console.log('%c --- View Captured ---', 'color: #2462ff; font-weight: bold;');
+  console.log(`Position: [${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}]`);
+  console.log(`Target: [${tar.x.toFixed(2)}, ${tar.y.toFixed(2)}, ${tar.z.toFixed(2)}]`);
+  console.log('----------------------');
+};
 
 // --- Editor State ---
 let isEditorMode = false;
@@ -208,11 +249,19 @@ function toggleMode() {
     updateGhostPiece();
     controls.maxPolarAngle = Math.PI / 2;
     controls.minDistance = 5;
+    
+    // Switch to Editor Camera
+    camera.position.set(...EDITOR_VIEW.pos);
+    controls.target.set(...EDITOR_VIEW.target);
   } else {
     removeGhostPiece();
-    if (isBirdseye) toggleCamera(); // Reset to 3D when closing
+    if (isBirdseye) toggleCamera(); 
     controls.maxPolarAngle = Math.PI / 2.12;
     controls.minDistance = 18;
+
+    // Return to Gallery Camera
+    camera.position.set(...GALLERY_VIEW.pos);
+    controls.target.set(...GALLERY_VIEW.target);
   }
 }
 
@@ -313,8 +362,14 @@ window.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
-  if (!isEditorMode) return;
   const key = e.key.toLowerCase();
+
+  // --- Capture Tool ---
+  if (key === 'c') {
+    window.getCameraConfig();
+  }
+
+  if (!isEditorMode) return;
   
   // --- Piece Selection Hotkeys ---
   const pieceKeys = {
@@ -471,6 +526,11 @@ function animate() {
 
   updatePulseMeshes(elapsedTime);
   
+  // Update Entities
+  if (pacman && pacman.userData.update) {
+    pacman.userData.update(elapsedTime);
+  }
+
   if (isEditorMode) {
     // Sync slider with camera
     zoomSlider.value = camera.position.distanceTo(controls.target);

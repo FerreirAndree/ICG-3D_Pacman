@@ -151,7 +151,7 @@ function createTransformedCylinderGeometry(axis, length, radius, openEnded, posi
   return geometry;
 }
 
-function createPedestal() {
+export function createPedestal() {
   const pedestal = new THREE.Group();
 
   const base = new THREE.Mesh(sharedGeometries.pedestalBase, sharedMaterials.structure);
@@ -530,16 +530,22 @@ export function createMazePiece(type) {
   return piece;
 }
 
-export function buildShowcase(layout = showcaseLayout) {
-  const showcase = new THREE.Group();
-  showcase.name = 'showcase';
+export function buildShowcase(layout) {
+  const group = new THREE.Group();
 
-  layout.forEach((entry) => {
-    const piece = createMazePiece(entry.type);
-    piece.position.set(entry.position[0], entry.position[1], entry.position[2]);
-    piece.rotation.y = entry.rotation ?? 0;
-    showcase.add(piece);
+  layout.forEach((item, index) => {
+    // 2-column grid layout
+    const col = index % 2;
+    const row = Math.floor(index / 2);
+    
+    // Spreading them out for gallery viewing (Tightened)
+    const xPos = col * 24;
+    const zPos = row * 24;
+    
+    const piece = createMazePiece(item.type);
+    piece.position.set(xPos, 6, zPos);
+    group.add(piece);
   });
 
-  return showcase;
+  return group;
 }
