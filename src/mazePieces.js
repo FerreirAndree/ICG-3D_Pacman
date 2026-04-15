@@ -137,8 +137,8 @@ function orientAlongAxis(object, axis) {
   }
 }
 
-function createTransformedCylinderGeometry(axis, length, radius, openEnded, position) {
-  const geometry = new THREE.CylinderGeometry(radius, radius, length, 24, 1, openEnded);
+function createTransformedCylinderGeometry(axis, length, radius, openEnded, position, segments = 24, heightSegments = 1) {
+  const geometry = new THREE.CylinderGeometry(radius, radius, length, segments, heightSegments, openEnded);
   const mesh = new THREE.Mesh(geometry);
   orientAlongAxis(mesh, axis);
   mesh.position.copy(position);
@@ -349,25 +349,28 @@ function createCornerPiece() {
   return piece;
 }
 
-function pointInsideCylinder(point, descriptor, radius = PIPE_RADIUS - 0.02) {
+function pointInsideCylinder(point, descriptor, radius = PIPE_RADIUS + 0.05) {
   const dx = point.x - descriptor.position.x;
   const dy = point.y - descriptor.position.y;
   const dz = point.z - descriptor.position.z;
 
   if (descriptor.axis === 'x') {
-    return Math.abs(dx) <= descriptor.length * 0.5 + 0.01 && dy * dy + dz * dz < radius * radius;
+    return Math.abs(dx) <= descriptor.length * 0.5 + 0.05 && dy * dy + dz * dz < radius * radius;
   }
 
-  return Math.abs(dz) <= descriptor.length * 0.5 + 0.01 && dx * dx + dy * dy < radius * radius;
+  return Math.abs(dz) <= descriptor.length * 0.5 + 0.05 && dx * dx + dy * dy < radius * radius;
 }
 
 function clipCylinderShellGeometry(descriptor, otherDescriptors) {
+  const heightSegments = Math.max(16, Math.floor(descriptor.length * 1.5));
   const geometry = createTransformedCylinderGeometry(
     descriptor.axis,
     descriptor.length,
     PIPE_RADIUS,
     true,
-    descriptor.position
+    descriptor.position,
+    64,
+    heightSegments
   ).toNonIndexed();
 
   const positions = geometry.getAttribute('position').array;
