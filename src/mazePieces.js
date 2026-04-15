@@ -48,11 +48,11 @@ function createMaterials() {
       attenuationDistance: 0.8
     }),
     rim: new THREE.MeshStandardMaterial({
-      color: 0xdceeff,
-      emissive: 0x182845,
-      emissiveIntensity: 0.2,
-      roughness: 0.22,
-      metalness: 0.34
+      color: 0x1d4ed8,
+      emissive: 0x0f34a0,
+      emissiveIntensity: 0.6,
+      roughness: 0.24,
+      metalness: 0.4
     }),
     structure: new THREE.MeshStandardMaterial({
       color: 0x151f2f,
@@ -155,14 +155,14 @@ function createPedestal() {
   const pedestal = new THREE.Group();
 
   const base = new THREE.Mesh(sharedGeometries.pedestalBase, sharedMaterials.structure);
-  base.position.y = 0.52;
+  base.position.y = -0.24;
 
   const upperDeck = new THREE.Mesh(sharedGeometries.pedestalTop, sharedMaterials.walkway);
-  upperDeck.position.y = 1.18;
+  upperDeck.position.y = 0.44;
 
   const halo = new THREE.Mesh(sharedGeometries.pedestalHalo, sharedMaterials.halo);
   halo.rotation.x = -Math.PI / 2;
-  halo.position.y = 0.04;
+  halo.position.y = 0.05;
 
   pedestal.add(base, upperDeck, halo);
   return pedestal;
