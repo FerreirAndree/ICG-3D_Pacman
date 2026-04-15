@@ -162,7 +162,7 @@ function createPedestal() {
 
   const halo = new THREE.Mesh(sharedGeometries.pedestalHalo, sharedMaterials.halo);
   halo.rotation.x = -Math.PI / 2;
-  halo.position.y = 0.05;
+  halo.position.y = 0.052;
 
   pedestal.add(base, upperDeck, halo);
   return pedestal;
