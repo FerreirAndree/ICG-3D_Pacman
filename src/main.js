@@ -7,7 +7,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x010204);
 scene.fog = new THREE.FogExp2(0x010204, 0.009);
 
-const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 240);
+const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 500);
 camera.position.set(36, 12.5, 49);
 
 const renderer = new THREE.WebGLRenderer({
@@ -26,17 +26,63 @@ appContainer.appendChild(renderer.domElement);
 // --- UI Injection ---
 const uiHtml = `
   <div id="mode-status">Showcase</div>
-  <div class="top-controls">
-    <button class="btn" id="btn-export">Export JSON</button>
-    <button class="btn btn-primary" id="btn-toggle-mode">Open Editor</button>
+  
+  <div class="command-deck" id="command-deck">
+    <div class="deck-header" id="deck-header">
+      <div class="deck-title">Command Deck</div>
+      <div class="collapse-icon">▼</div>
+    </div>
+    
+    <div class="deck-body">
+      <button class="btn btn-primary" id="btn-toggle-mode">Open Editor</button>
+      
+      <div class="editor-only-controls" id="editor-only-controls" style="display: none; flex-direction: column; gap: 20px;">
+        <button class="btn" id="btn-export">Export JSON</button>
+
+        <div class="control-group">
+          <div class="control-label">Zoom Level</div>
+          <input type="range" id="zoom-slider" min="10" max="300" value="60">
+        </div>
+
+        <div class="segmented-toggle">
+          <div class="toggle-slider" id="view-slider"></div>
+          <div class="toggle-option active" data-view="3d">3D View</div>
+          <div class="toggle-option" data-view="2d">Bird's Eye</div>
+        </div>
+        
+        <div class="hotkey-list">
+          <div class="hotkey-item"><span>Free Mode</span> <span class="hotkey-key">V</span></div>
+          <div class="hotkey-item"><span>Place</span> <span class="hotkey-key">Click / Space</span></div>
+          <div class="hotkey-item"><span>Rotate</span> <span class="hotkey-key">R</span></div>
+          <div class="hotkey-item"><span>Delete</span> <span class="hotkey-key">X</span></div>
+          <div class="hotkey-item"><span>Pan</span> <span class="hotkey-key">WASD / Arrows</span></div>
+        </div>
+      </div>
+    </div>
   </div>
+
   <div class="editor-ui" id="editor-ui">
     <div class="bottom-bar">
-      <div class="piece-card active" data-type="straight">Straight</div>
-      <div class="piece-card" data-type="corner">Corner</div>
-      <div class="piece-card" data-type="tjunction">T-Junc</div>
-      <div class="piece-card" data-type="crossroad">Cross</div>
-      <div class="piece-card" data-type="teleport">Teleport</div>
+      <div class="piece-card active" data-type="straight">
+        <span class="key-hint">1</span>
+        Straight
+      </div>
+      <div class="piece-card" data-type="corner">
+        <span class="key-hint">2</span>
+        Corner
+      </div>
+      <div class="piece-card" data-type="tjunction">
+        <span class="key-hint">3</span>
+        T-Junc
+      </div>
+      <div class="piece-card" data-type="crossroad">
+        <span class="key-hint">4</span>
+        Cross
+      </div>
+      <div class="piece-card" data-type="teleport">
+        <span class="key-hint">5</span>
+        Teleport
+      </div>
     </div>
   </div>
 `;
@@ -45,9 +91,9 @@ appContainer.insertAdjacentHTML('beforeend', uiHtml);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
-controls.target.set(5, 4.1, 1);
-controls.minDistance = 18;
-controls.maxDistance = 90;
+controls.target.set(0, 0, 0);
+controls.minDistance = 10;
+controls.maxDistance = 300;
 controls.maxPolarAngle = Math.PI / 2.12;
 controls.screenSpacePanning = false;
 
@@ -122,6 +168,7 @@ scene.add(editorMaze);
 
 // --- Editor State ---
 let isEditorMode = false;
+let isBirdseye = false;
 let currentPieceType = 'straight';
 let currentRotation = 0;
 let ghostPiece = null;
@@ -140,16 +187,22 @@ function toggleMode() {
   const statusTab = document.querySelector('#mode-status');
   const toggleBtn = document.querySelector('#btn-toggle-mode');
   const editorUi = document.querySelector('#editor-ui');
+  const editorControls = document.querySelector('#editor-only-controls');
 
   isEditorMode ? appContainer.classList.add('editor-active') : appContainer.classList.remove('editor-active');
   
   statusTab.textContent = isEditorMode ? 'Editor' : 'Showcase';
   toggleBtn.textContent = isEditorMode ? 'Close Editor' : 'Open Editor';
   editorUi.classList.toggle('active', isEditorMode);
+  editorControls.style.display = isEditorMode ? 'flex' : 'none';
   
   gridHelper.visible = isEditorMode;
   showcase.visible = !isEditorMode;
   editorMaze.visible = isEditorMode;
+
+  // Studio Lighting Boost
+  scene.fog.density = isEditorMode ? 0 : 0.009;
+  ambient.intensity = isEditorMode ? 2.8 : 1.4;
 
   if (isEditorMode) {
     updateGhostPiece();
@@ -157,26 +210,83 @@ function toggleMode() {
     controls.minDistance = 5;
   } else {
     removeGhostPiece();
+    if (isBirdseye) toggleCamera(); // Reset to 3D when closing
     controls.maxPolarAngle = Math.PI / 2.12;
     controls.minDistance = 18;
   }
 }
 
+function toggleCamera(type) {
+  isBirdseye = (type === '2d');
+  const slider = document.querySelector('#view-slider');
+  const options = document.querySelectorAll('.toggle-option');
+  
+  options.forEach(opt => {
+    opt.classList.toggle('active', opt.dataset.view === type);
+  });
+  
+  if (isBirdseye) {
+    slider.classList.add('right');
+    camera.position.set(0, 100, 0);
+    controls.target.set(0, 0, 0);
+    controls.enableRotate = false;
+  } else {
+    slider.classList.remove('right');
+    camera.position.set(36, 40, 49);
+    controls.target.set(0, 0, 0);
+    controls.enableRotate = true;
+  }
+}
+
+// --- Collapse Logic ---
+const deck = document.querySelector('#command-deck');
+const zoomSlider = document.querySelector('#zoom-slider');
+
+document.querySelector('#deck-header').addEventListener('click', () => {
+  deck.classList.toggle('collapsed');
+});
+
+zoomSlider.addEventListener('input', (e) => {
+  const dist = parseFloat(e.target.value);
+  const direction = camera.position.clone().sub(controls.target).normalize();
+  camera.position.copy(controls.target).add(direction.multiplyScalar(dist));
+});
+
 document.querySelector('#btn-toggle-mode').addEventListener('click', toggleMode);
 
+document.querySelectorAll('.toggle-option').forEach(opt => {
+  opt.addEventListener('click', () => toggleCamera(opt.dataset.view));
+});
+
 // --- Piece Selection ---
+function selectPiece(type) {
+  const cards = document.querySelectorAll('.piece-card');
+  const activeCard = document.querySelector('.piece-card.active');
+  if (activeCard) activeCard.classList.remove('active');
+  
+  if (type === null) {
+    currentPieceType = null;
+    removeGhostPiece();
+    return;
+  }
+
+  const targetCard = Array.from(cards).find(c => c.dataset.type === type);
+  if (targetCard) targetCard.classList.add('active');
+  
+  currentPieceType = type;
+  updateGhostPiece();
+}
+
 document.querySelectorAll('.piece-card').forEach(card => {
   card.addEventListener('click', () => {
-    document.querySelector('.piece-card.active').classList.remove('active');
-    card.classList.add('active');
-    currentPieceType = card.dataset.type;
-    updateGhostPiece();
+    selectPiece(card.dataset.type);
   });
 });
 
 // --- Ghost Piece ---
 function updateGhostPiece() {
   removeGhostPiece();
+  if (currentPieceType === null) return;
   ghostPiece = createMazePiece(currentPieceType);
   ghostPiece.traverse(obj => {
     if (obj.material) {
@@ -204,12 +314,55 @@ window.addEventListener('mousemove', (e) => {
 
 window.addEventListener('keydown', (e) => {
   if (!isEditorMode) return;
-  if (e.key.toLowerCase() === 'r') {
+  const key = e.key.toLowerCase();
+  
+  // --- Piece Selection Hotkeys ---
+  const pieceKeys = {
+    '1': 'straight',
+    '2': 'corner',
+    '3': 'tjunction',
+    '4': 'crossroad',
+    '5': 'teleport'
+  };
+  if (pieceKeys[key]) {
+    selectPiece(pieceKeys[key]);
+  }
+  
+  // --- Free Mode ---
+  if (key === 'v') {
+    selectPiece(null);
+  }
+
+  if (key === ' ') {
+    placePiece();
+  }
+
+  // --- Piece Controls ---
+  if (key === 'r') {
     currentRotation += Math.PI / 2;
     if (ghostPiece) ghostPiece.rotation.y = currentRotation;
   }
-  if (e.key.toLowerCase() === 'x') {
+  if (key === 'x') {
     deletePieceAtCursor();
+  }
+
+  // --- Keyboard Panning ---
+  const panSpeed = isBirdseye ? 5.5 : 2.8;
+  if (key === 'arrowup' || key === 'w') {
+    controls.target.z -= panSpeed;
+    camera.position.z -= panSpeed;
+  }
+  if (key === 'arrowdown' || key === 's') {
+    controls.target.z += panSpeed;
+    camera.position.z += panSpeed;
+  }
+  if (key === 'arrowleft' || key === 'a') {
+    controls.target.x -= panSpeed;
+    camera.position.x -= panSpeed;
+  }
+  if (key === 'arrowright' || key === 'd') {
+    controls.target.x += panSpeed;
+    camera.position.x += panSpeed;
   }
 });
 
@@ -233,6 +386,7 @@ function getGridIntersection() {
 }
 
 function placePiece() {
+  if (currentPieceType === null) return;
   const pos = getGridIntersection();
   if (!pos) return;
 
@@ -317,13 +471,18 @@ function animate() {
 
   updatePulseMeshes(elapsedTime);
   
-  if (isEditorMode && ghostPiece) {
-    const pos = getGridIntersection();
-    if (pos) {
-      ghostPiece.position.set(pos.x, 0, pos.z);
-      ghostPiece.visible = true;
-    } else {
-      ghostPiece.visible = false;
+  if (isEditorMode) {
+    // Sync slider with camera
+    zoomSlider.value = camera.position.distanceTo(controls.target);
+
+    if (ghostPiece) {
+      const pos = getGridIntersection();
+      if (pos) {
+        ghostPiece.position.set(pos.x, 0, pos.z);
+        ghostPiece.visible = true;
+      } else {
+        ghostPiece.visible = false;
+      }
     }
   }
 
