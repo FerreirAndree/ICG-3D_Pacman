@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export const TILE_SIZE = 18;
 
@@ -34,15 +34,18 @@ const junctionShellGeometryCache = new Map();
 
 function createMaterials() {
   return {
-    glass: new THREE.MeshStandardMaterial({
-      color: 0xd9f1ff,
+    glass: new THREE.MeshPhysicalMaterial({
+      color: 0xe0f4ff,
+      transmission: 0.98,
+      thickness: PIPE_SHELL_THICKNESS,
+      roughness: 0.04,
+      metalness: 0.02,
+      ior: 1.48,
+      reflectivity: 0.5,
       transparent: true,
-      opacity: 0.24,
-      emissive: 0x10203e,
-      emissiveIntensity: 0.12,
-      roughness: 0.08,
-      metalness: 0.08,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      attenuationColor: 0xffffff,
+      attenuationDistance: 0.8
     }),
     rim: new THREE.MeshStandardMaterial({
       color: 0xdceeff,
@@ -169,10 +172,10 @@ function createHub() {
   const hub = new THREE.Group();
 
   const deck = new THREE.Mesh(sharedGeometries.hubDeck, sharedMaterials.walkway);
-  deck.position.y = HUB_HEIGHT - PIPE_RADIUS + 0.26;
+  deck.position.y = HUB_HEIGHT - PIPE_RADIUS + 0.14;
 
   const halo = setPulse(new THREE.Mesh(sharedGeometries.hubHalo, sharedMaterials.led), 1.2, 0.18, 1.3);
-  halo.position.y = HUB_HEIGHT - PIPE_RADIUS + 0.42;
+  halo.position.y = HUB_HEIGHT - PIPE_RADIUS + 0.22;
   halo.rotation.x = Math.PI / 2;
 
   hub.add(deck, halo);
@@ -362,14 +365,14 @@ function pointInsideCylinder(point, descriptor, radius = PIPE_RADIUS + 0.05) {
 }
 
 function clipCylinderShellGeometry(descriptor, otherDescriptors) {
-  const heightSegments = Math.max(16, Math.floor(descriptor.length * 1.5));
+  const heightSegments = Math.max(32, Math.floor(descriptor.length * 2.5));
   const geometry = createTransformedCylinderGeometry(
     descriptor.axis,
     descriptor.length,
     PIPE_RADIUS,
     true,
     descriptor.position,
-    64,
+    128,
     heightSegments
   ).toNonIndexed();
 
@@ -442,7 +445,9 @@ function getJunctionShellGeometry(type) {
       descriptors.filter((_, otherIndex) => otherIndex !== index)
     )
   );
-  const mergedShell = mergeGeometries(clippedShells, false);
+
+  let mergedShell = mergeGeometries(clippedShells, false);
+  mergedShell = mergeVertices(mergedShell, 0.001);
   mergedShell.computeVertexNormals();
   junctionShellGeometryCache.set(type, mergedShell.clone());
 
