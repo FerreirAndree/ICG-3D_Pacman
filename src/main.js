@@ -1,7 +1,15 @@
+/**
+ * OpenAI. (2026). ChatGPT (GPT-5.4) [Large language model]. https://chat.openai.com
+ * Google. (2026). Gemini [Large language model]. https://gemini.google.com
+ * 
+ * Parts of the code in this file were co-authored with AI assistants to refine 
+ * the 3D logic, architectural layout, and high-fidelity entity designs.
+ */
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildShowcase, showcaseLayout, createMazePiece, createPedestal, TILE_SIZE } from './mazePieces.js';
-import { createPacman } from './entities.js';
+import { createPacman, createGhost, createPellet } from './entities.js';
 import './style.css';
 
 const scene = new THREE.Scene();
@@ -12,8 +20,8 @@ const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerH
 
 // --- Camera Profiles ---
 const GALLERY_VIEW = {
-  pos: [-52.15, 34.87, 31.20],
-  target: [13.69, 0.00, 26.19]
+  pos: [-52.15, 34.87, 81.20], // Shifted camera back too
+  target: [13.69, 0.00, 46.19]  // Pushed target back
 };
 
 const EDITOR_VIEW = {
@@ -180,8 +188,9 @@ scene.add(showcase);
 scene.add(editorMaze);
 
 // --- Hero Wing (Characters) ---
-const HERO_X = 17.5;
-const HERO_Z = 80;  // Moved closer
+// Pushed further back for monumental separation (Row 5 equivalent)
+const HERO_X = 0; 
+const HERO_Z = 96; 
 
 // Floating Podium for Pac-man
 const heroPodium = createPedestal();
@@ -192,6 +201,28 @@ const pacman = createPacman();
 pacman.position.set(HERO_X, 7.5, HERO_Z);
 pacman.rotation.y = Math.PI / 1.4 + Math.PI / 2 + Math.PI / 12; // Extra 15 deg left
 showcase.add(pacman);
+
+// Ghost Wing
+const GHOST_X = HERO_X + 24; // Next grid column
+const ghostPodium = createPedestal();
+ghostPodium.position.set(GHOST_X, 3.5, HERO_Z); 
+showcase.add(ghostPodium);
+
+const ghost = createGhost(0xff0044); // Blinky Red
+ghost.position.set(GHOST_X, 8.5, HERO_Z);
+ghost.rotation.y = -Math.PI / 4; 
+showcase.add(ghost);
+
+// Pellet Wing (Row 2 of the 2x2 Character Grid)
+const PELLET_X = HERO_X; // Back to column 1
+const PELLET_Z = HERO_Z + 24; // Next grid row
+const pelletPodium = createPedestal();
+pelletPodium.position.set(PELLET_X, 3.5, PELLET_Z);
+showcase.add(pelletPodium);
+
+const pellet = createPellet();
+pellet.position.set(PELLET_X, 7.5, PELLET_Z);
+showcase.add(pellet);
 
 // Initialize starting view
 controls.target.set(...GALLERY_VIEW.target);

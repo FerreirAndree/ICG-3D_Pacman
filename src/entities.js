@@ -1,3 +1,11 @@
+/**
+ * OpenAI. (2026). ChatGPT (GPT-5.4) [Large language model]. https://chat.openai.com
+ * Google. (2026). Gemini [Large language model]. https://gemini.google.com
+ * 
+ * Parts of the mechanical modeling logic and high-fidelity animation loops in this 
+ * file were co-authored with AI assistants to achieve the Cyber-Pacman aesthetic.
+ */
+
 import * as THREE from 'three';
 
 /**
@@ -95,6 +103,157 @@ export function createPacman() {
 
       leftEye.getObjectByName('eyeRing').rotation.z = time * 2.5;
       rightEye.getObjectByName('eyeRing').rotation.z = -time * 2.5;
+    }
+  };
+
+  return group;
+}
+
+/**
+ * Creates a high-fidelity 'Cyber-Phantom' Ghost
+ */
+export function createGhost(color = 0xff0044) {
+  const group = new THREE.Group();
+
+  // --- Materials ---
+  const shellMaterial = new THREE.MeshPhysicalMaterial({
+    color: color,
+    metalness: 0.1,
+    roughness: 0.1,
+    transmission: 0.4,
+    thickness: 1.0,
+    ior: 1.45,
+    emissive: color,
+    emissiveIntensity: 0.2,
+    clearcoat: 1.0,
+    transparent: true
+  });
+
+  const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x080808, metalness: 0.9 });
+  const neonMaterial = new THREE.MeshBasicMaterial({ color: color });
+  
+  const coreMaterial = new THREE.MeshStandardMaterial({
+    color: color,
+    emissive: color,
+    emissiveIntensity: 5.0,
+    transparent: true,
+    opacity: 0.9
+  });
+
+  // --- Geometry ---
+  const domeGeo = new THREE.CapsuleGeometry(3.0, 2.5, 4, 24);
+  const coreGeo = new THREE.SphereGeometry(0.8, 16, 16);
+  
+  // --- Body Shell ---
+  const shell = new THREE.Mesh(domeGeo, shellMaterial);
+  shell.position.y = 1.0;
+  group.add(shell);
+
+  // --- Internal Skeleton ---
+  const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 5, 12), frameMaterial);
+  group.add(spine);
+
+  // --- Tactical HUD Eyes (Rectangular) ---
+  function createSpectralEye(posX) {
+    const eyeGroup = new THREE.Group();
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.1), neonMaterial);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), neonMaterial);
+    pupil.position.z = 0.1;
+    
+    eyeGroup.add(frame, pupil);
+    eyeGroup.position.set(posX, 2.2, 2.2);
+    eyeGroup.rotation.y = posX > 0 ? 0.3 : -0.3;
+    return eyeGroup;
+  }
+  group.add(createSpectralEye(1.1), createSpectralEye(-1.1));
+
+  // --- Floating "Tentacles" (Segments) ---
+  const segments = [];
+  const segGeo = new THREE.BoxGeometry(0.6, 1.2, 0.6);
+  for (let i = 0; i < 8; i++) {
+    const segment = new THREE.Mesh(segGeo, frameMaterial);
+    const angle = (i / 8) * Math.PI * 2;
+    segment.position.set(Math.cos(angle) * 2.2, -1.8, Math.sin(angle) * 2.2);
+    group.add(segment);
+    segments.push(segment);
+  }
+
+  // --- Core ---
+  const mainCore = new THREE.Mesh(coreGeo, coreMaterial);
+  group.add(mainCore);
+
+  // --- Animation ---
+  group.userData = {
+    type: 'ghost',
+    update: (time) => {
+      // Floating/Levitation
+      group.position.y += Math.sin(time * 2) * 0.005;
+      
+      // Spectral Wave for segments
+      segments.forEach((seg, i) => {
+        seg.position.y = -1.8 + Math.sin(time * 3 + i * 0.8) * 0.4;
+        seg.rotation.y = time * 2;
+      });
+
+      // Pulse Core
+      mainCore.scale.setScalar(1 + Math.sin(time * 8) * 0.15);
+      mainCore.material.emissiveIntensity = 4 + Math.sin(time * 8) * 2;
+    }
+  };
+
+  return group;
+}
+
+/**
+ * Creates a high-fidelity 'Cyber-Pellet' (Energy Shard)
+ */
+export function createPellet() {
+  const group = new THREE.Group();
+
+  const color = 0xffaa00; // Warm Energy Orange
+  
+  const coreMaterial = new THREE.MeshStandardMaterial({
+    color: color,
+    emissive: color,
+    emissiveIntensity: 6.0,
+  });
+
+  const ringMaterial = new THREE.MeshBasicMaterial({
+    color: color,
+    transparent: true,
+    opacity: 0.4,
+    side: THREE.DoubleSide
+  });
+
+  // --- Core (Low-poly Energy Crystal) ---
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.0, 0), coreMaterial);
+  group.add(core);
+
+  // --- Outer Spinner Ring ---
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.8, 0.04, 8, 48), ringMaterial);
+  ring.rotation.x = Math.PI / 2;
+  group.add(ring);
+
+  // --- Warm Ambient Glow ---
+  const light = new THREE.PointLight(color, 8, 15, 2);
+  group.add(light);
+
+  // --- Animation ---
+  group.userData = {
+    type: 'pellet',
+    update: (time) => {
+      // Spinning core
+      core.rotation.y = time * 2;
+      core.rotation.z = time * 1.5;
+      
+      // Floating motion
+      group.position.y += Math.sin(time * 3) * 0.006;
+      
+      // Ring animation
+      ring.rotation.z = -time * 3;
+      ring.scale.setScalar(1 + Math.sin(time * 4) * 0.1);
+      
+      light.intensity = 6 + Math.sin(time * 6) * 2;
     }
   };
 

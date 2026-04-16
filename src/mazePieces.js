@@ -1,3 +1,11 @@
+/**
+ * OpenAI. (2026). ChatGPT (GPT-5.4) [Large language model]. https://chat.openai.com
+ * Google. (2026). Gemini [Large language model]. https://gemini.google.com
+ * 
+ * The procedural generation logic and architectural modular design in this file 
+ * were co-authored with AI assistants to create the showroom gallery experience.
+ */
+
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
