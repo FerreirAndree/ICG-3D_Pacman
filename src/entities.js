@@ -191,19 +191,24 @@ export function createGhost(color = 0xff0044) {
            float dL = distance(vLocalPos, uEyeLeft);
            float dEye = min(dR, dL);
            
-           // Smaller, softer eyes
-           float eyeCoreRadius = 0.42; 
-           float eyeHaloRadius = 0.8;
+           // We keep the soft gradient, but drastically increase the size of the 
+           // solid hot core so the eyes return to their original large size.
+           float eyeCoreRadius = 0.55; 
+           float eyeHaloRadius = 0.8; // Reverted to the tighter 0.8 radius
            
-           float eyeCore = 1.0 - smoothstep(eyeCoreRadius - 0.02, eyeCoreRadius, dEye);
-           float eyeHalo = 1.0 - smoothstep(eyeCoreRadius, eyeHaloRadius, dEye);
+           // Solid white from 0.0 to 0.28, then smoothly blurs out to 0.55
+           float eyeCore = 1.0 - smoothstep(0.28, eyeCoreRadius, dEye);
+           
+           // Reverted to the subtle, tighter bloom 
+           float eyeHalo = 1.0 - smoothstep(0.28, eyeHaloRadius, dEye);
            
            // Dim the eyes significantly when viewed from the inside (back of the head)
            float eyeIntensity = gl_FrontFacing ? 1.0 : 0.2;
            
            // Paint the eyes over the shell color (pure white from front, dim pinkish from back)
            finalColor = mix(finalColor, vec3(1.0), eyeCore * eyeIntensity);
-           // Add halo brightness and solid opacity for the core, scaled by intensity
+           
+           // Reverted halo multiplier back to 0.15 for the original subtle effect
            finalAlpha += ((eyeHalo * 0.15) + (eyeCore * 0.85)) * eyeIntensity; 
         }
         
