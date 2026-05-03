@@ -202,17 +202,6 @@ pacman.position.set(HERO_X, 7.5, HERO_Z);
 pacman.rotation.y = Math.PI / 1.4 + Math.PI / 2 + Math.PI / 12; // Extra 15 deg left
 showcase.add(pacman);
 
-// Ghost Wing
-const GHOST_X = HERO_X + 24; // Next grid column
-const ghostPodium = createPedestal();
-ghostPodium.position.set(GHOST_X, 3.5, HERO_Z); 
-showcase.add(ghostPodium);
-
-const ghost = createGhost(0xff0044); // Blinky Red
-ghost.position.set(GHOST_X, 4.8, HERO_Z);
-ghost.rotation.y = -Math.PI / 4; 
-showcase.add(ghost);
-
 // Pellet Wing (Row 2 of the 2x2 Character Grid)
 const PELLET_X = HERO_X; // Back to column 1
 const PELLET_Z = HERO_Z + 24; // Next grid row
@@ -223,6 +212,46 @@ showcase.add(pelletPodium);
 const pellet = createPellet();
 pellet.position.set(PELLET_X, 7.5, PELLET_Z);
 showcase.add(pellet);
+
+// --- Ghost Wing (2x2 Grid of the Classic Ghosts) ---
+const GHOST_X = HERO_X + 24; // Column 2
+const GHOST_X2 = GHOST_X + 24; // Column 3
+
+// Blinky (Red)
+const blinkyPodium = createPedestal();
+blinkyPodium.position.set(GHOST_X, 3.5, HERO_Z); 
+showcase.add(blinkyPodium);
+const blinky = createGhost(0xff0044); // Neon Red
+blinky.position.set(GHOST_X, 4.8, HERO_Z);
+blinky.rotation.y = -Math.PI / 4; 
+showcase.add(blinky);
+
+// Pinky (Pink)
+const pinkyPodium = createPedestal();
+pinkyPodium.position.set(GHOST_X2, 3.5, HERO_Z); 
+showcase.add(pinkyPodium);
+const pinky = createGhost(0xff44bb); // Neon Pink
+pinky.position.set(GHOST_X2, 4.8, HERO_Z);
+pinky.rotation.y = -Math.PI / 4; 
+showcase.add(pinky);
+
+// Inky (Cyan)
+const inkyPodium = createPedestal();
+inkyPodium.position.set(GHOST_X, 3.5, PELLET_Z); 
+showcase.add(inkyPodium);
+const inky = createGhost(0x00ccff); // Neon Cyan
+inky.position.set(GHOST_X, 4.8, PELLET_Z);
+inky.rotation.y = -Math.PI / 4; 
+showcase.add(inky);
+
+// Clyde (Orange)
+const clydePodium = createPedestal();
+clydePodium.position.set(GHOST_X2, 3.5, PELLET_Z); 
+showcase.add(clydePodium);
+const clyde = createGhost(0xffaa00); // Neon Orange
+clyde.position.set(GHOST_X2, 4.8, PELLET_Z);
+clyde.rotation.y = -Math.PI / 4; 
+showcase.add(clyde);
 
 // Initialize starting view
 controls.target.set(...GALLERY_VIEW.target);
@@ -561,8 +590,17 @@ function animate() {
   if (pacman && pacman.userData.update) {
     pacman.userData.update(elapsedTime);
   }
-  if (ghost && ghost.userData.update) {
-    ghost.userData.update(elapsedTime);
+  if (blinky && blinky.userData.update) {
+    blinky.userData.update(elapsedTime);
+  }
+  if (pinky && pinky.userData.update) {
+    pinky.userData.update(elapsedTime);
+  }
+  if (inky && inky.userData.update) {
+    inky.userData.update(elapsedTime);
+  }
+  if (clyde && clyde.userData.update) {
+    clyde.userData.update(elapsedTime);
   }
   if (pellet && pellet.userData.update) {
     pellet.userData.update(elapsedTime);
