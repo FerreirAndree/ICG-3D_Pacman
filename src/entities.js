@@ -146,7 +146,12 @@ export function createGhost(color = 0xff0044) {
       uHeight: { value: bodyHeight },
       // Mathematically calculate the exact surface coordinates of the eyes on the dome
       uEyeRight: { value: new THREE.Vector3(0.8, bodyHeight + 0.65, Math.sqrt(radius*radius - 0.8*0.8 - 0.65*0.65)) },
-      uEyeLeft: { value: new THREE.Vector3(-0.8, bodyHeight + 0.65, Math.sqrt(radius*radius - 0.8*0.8 - 0.65*0.65)) }
+      uEyeLeft: { value: new THREE.Vector3(-0.8, bodyHeight + 0.65, Math.sqrt(radius*radius - 0.8*0.8 - 0.65*0.65)) },
+      // Vulnerability state (0.0 = normal, 1.0 = scared blue, 2.0 = flashing warning)
+      uIsVulnerable: { value: 0.0 },
+      uVulnerableColor: { value: new THREE.Color(0x0022ff) }, // Deep neon blue
+      uVulnerableEyeColor: { value: new THREE.Color(0xffb888) }, // Peach
+      uTime: { value: 0.0 }
     },
     vertexShader: `
       varying vec3 vNormal;
@@ -163,6 +168,10 @@ export function createGhost(color = 0xff0044) {
       uniform float uHeight;
       uniform vec3 uEyeRight;
       uniform vec3 uEyeLeft;
+      uniform float uIsVulnerable;
+      uniform vec3 uVulnerableColor;
+      uniform vec3 uVulnerableEyeColor;
+      uniform float uTime;
       
       varying vec3 vNormal;
       varying vec3 vLocalPos;
@@ -181,35 +190,65 @@ export function createGhost(color = 0xff0044) {
         
         float finalAlpha = baseOpacity + rimOpacity + skirtOpacity;
         
-        // Base color shift
-        vec3 finalColor = mix(uColor, vec3(1.0), fresnel * 0.35);
+        // --- Vulnerability State Logic ---
+        bool isVulnerable = uIsVulnerable > 0.5;
+        bool isFlashing = uIsVulnerable > 1.5;
         
-        // --- Shader Eyes (Seamlessly painted onto the curvature) ---
+        // Flashing alternates cleanly between 0 and 1 every ~0.2 seconds
+        float flashCycle = isFlashing ? step(0.0, sin(uTime * 15.0)) : 0.0;
+        
+        // Classic flashing colors: Blue body/Peach eyes -> White body/Red eyes
+        vec3 activeVulnerableColor = mix(uVulnerableColor, vec3(0.9, 0.9, 1.0), flashCycle);
+        vec3 activeVulnerableEyeColor = mix(uVulnerableEyeColor, vec3(1.0, 0.1, 0.1), flashCycle);
+        
+        // Base color shift: Transition to active vulnerable color if scared
+        vec3 activeShellColor = mix(uColor, activeVulnerableColor, isVulnerable ? 1.0 : 0.0);
+        vec3 finalColor = mix(activeShellColor, vec3(1.0), fresnel * 0.35);
+        
+        // --- Shader Eyes & Mouth (Seamlessly painted onto the curvature) ---
         // Only draw on the front half of the ghost
         if (vLocalPos.z > 0.0) {
            float dR = distance(vLocalPos, uEyeRight);
            float dL = distance(vLocalPos, uEyeLeft);
            float dEye = min(dR, dL);
            
-           // We keep the soft gradient, but drastically increase the size of the 
-           // solid hot core so the eyes return to their original large size.
            float eyeCoreRadius = 0.55; 
-           float eyeHaloRadius = 0.8; // Reverted to the tighter 0.8 radius
+           float eyeHaloRadius = 0.8; 
            
-           // Solid white from 0.0 to 0.28, then smoothly blurs out to 0.55
            float eyeCore = 1.0 - smoothstep(0.28, eyeCoreRadius, dEye);
-           
-           // Reverted to the subtle, tighter bloom 
            float eyeHalo = 1.0 - smoothstep(0.28, eyeHaloRadius, dEye);
            
-           // Dim the eyes significantly when viewed from the inside (back of the head)
            float eyeIntensity = gl_FrontFacing ? 1.0 : 0.2;
            
-           // Paint the eyes over the shell color (pure white from front, dim pinkish from back)
-           finalColor = mix(finalColor, vec3(1.0), eyeCore * eyeIntensity);
+           // Transition eye color when vulnerable
+           vec3 currentEyeColor = mix(vec3(1.0), activeVulnerableEyeColor, isVulnerable ? 1.0 : 0.0);
            
-           // Reverted halo multiplier back to 0.15 for the original subtle effect
+           // Paint the eyes over the shell color
+           finalColor = mix(finalColor, currentEyeColor, eyeCore * eyeIntensity);
            finalAlpha += ((eyeHalo * 0.15) + (eyeCore * 0.85)) * eyeIntensity; 
+           
+           // --- Vulnerable Animated Squiggly Mouth ---
+           if (isVulnerable) {
+               // Using cos() makes it perfectly symmetrical around x=0!
+               // Adding uTime animates the wave, making it travel horizontally.
+               float mouthY = 3.5 + cos(vLocalPos.x * 7.0 + uTime * 8.0) * 0.15;
+               float dMouth = abs(vLocalPos.y - mouthY);
+               
+               // Constrain the mouth width
+               if (abs(vLocalPos.x) < 1.4 && vLocalPos.y > 2.5 && vLocalPos.y < 4.5) {
+                   // Soft fade at the edges of the mouth
+                   float mouthEdgeFade = smoothstep(1.4, 1.0, abs(vLocalPos.x));
+                   
+                   float mouthCore = 1.0 - smoothstep(0.04, 0.08, dMouth);
+                   float mouthHalo = 1.0 - smoothstep(0.08, 0.25, dMouth);
+                   
+                   mouthCore *= mouthEdgeFade;
+                   mouthHalo *= mouthEdgeFade;
+                   
+                   finalColor = mix(finalColor, activeVulnerableEyeColor, mouthCore * eyeIntensity);
+                   finalAlpha += ((mouthHalo * 0.2) + (mouthCore * 0.8)) * eyeIntensity;
+               }
+           }
         }
         
         gl_FragColor = vec4(finalColor, finalAlpha);
@@ -255,6 +294,9 @@ export function createGhost(color = 0xff0044) {
   group.userData = {
     type: 'ghost',
     update: (time) => {
+      // Pass time to the shader for the animated mouth and flashing
+      ghostShader.uniforms.uTime.value = time;
+      
       // Capture the initial Y position set by the main scene
       if (baseY === null) {
         baseY = group.position.y;
@@ -283,6 +325,13 @@ export function createGhost(color = 0xff0044) {
       bodyGeo.computeVertexNormals();
       posAttr.needsUpdate = true;
     }
+  };
+
+  // --- API ---
+  group.setVulnerable = (state) => {
+    if (state === 'flashing') ghostShader.uniforms.uIsVulnerable.value = 2.0;
+    else if (state) ghostShader.uniforms.uIsVulnerable.value = 1.0;
+    else ghostShader.uniforms.uIsVulnerable.value = 0.0;
   };
 
   return group;

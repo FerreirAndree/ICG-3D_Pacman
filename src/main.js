@@ -253,6 +253,20 @@ clyde.position.set(GHOST_X2, 4.8, PELLET_Z);
 clyde.rotation.y = -Math.PI / 4; 
 showcase.add(clyde);
 
+// --- Scared Ghost (Vulnerable State Demonstration) ---
+const SCARED_X = GHOST_X + 12; // Centered behind the grid
+const SCARED_Z = PELLET_Z + 24; // Row 3
+
+const scaredPodium = createPedestal();
+scaredPodium.position.set(SCARED_X, 3.5, SCARED_Z); 
+showcase.add(scaredPodium);
+
+const scaredGhost = createGhost(0xffffff); // Base color is overridden
+scaredGhost.position.set(SCARED_X, 4.8, SCARED_Z);
+scaredGhost.rotation.y = -Math.PI / 4; 
+scaredGhost.setVulnerable('flashing'); // Activate the terrifying flashing state!
+showcase.add(scaredGhost);
+
 // Initialize starting view
 controls.target.set(...GALLERY_VIEW.target);
 camera.position.set(...GALLERY_VIEW.pos);
@@ -601,6 +615,9 @@ function animate() {
   }
   if (clyde && clyde.userData.update) {
     clyde.userData.update(elapsedTime);
+  }
+  if (scaredGhost && scaredGhost.userData.update) {
+    scaredGhost.userData.update(elapsedTime);
   }
   if (pellet && pellet.userData.update) {
     pellet.userData.update(elapsedTime);
