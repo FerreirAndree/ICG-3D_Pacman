@@ -117,30 +117,9 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 export function createGhost(color = 0xff0044) {
   const group = new THREE.Group();
 
-  // --- Materials ---
-  const shellMaterial = new THREE.MeshPhysicalMaterial({
-    color: 0x000000,
-    emissive: color,
-    emissiveIntensity: 1.0,
-    transmission: 0.98,   
-    opacity: 1.0,
-    transparent: true,
-    roughness: 0.01,
-    ior: 1.1,
-    thickness: 1.5,
-    side: THREE.DoubleSide,
-    depthWrite: false
-  });
-
-  const eyeMaterial = new THREE.MeshBasicMaterial({ 
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.98
-  });
-
   // --- Geometry Construction (Bottom at Y=0) ---
-  const radius = 1.9;
-  const bodyHeight = 4.5; // Shorter, better proportion
+  const radius = 2.1; 
+  const bodyHeight = 4.5; 
   const radialSegments = 64;
   const heightSegments = 32;
 
@@ -150,7 +129,6 @@ export function createGhost(color = 0xff0044) {
   const cylinderGeo = new THREE.CylinderGeometry(radius, radius, bodyHeight, radialSegments, heightSegments, true);
   cylinderGeo.translate(0, bodyHeight / 2, 0);
   
-  // Merge cleanly to keep normal smoothing across the body
   const bodyGeo = mergeGeometries([domeGeo, cylinderGeo]);
   bodyGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
   
@@ -160,31 +138,110 @@ export function createGhost(color = 0xff0044) {
     originalYs[i] = posAttr.getY(i);
   }
 
+  // --- Holographic Shader Material ---
+  // A custom shader to create that perfect glowing, translucent rim-lit membrane
+  const ghostShader = {
+    uniforms: {
+      uColor: { value: new THREE.Color(color) },
+      uHeight: { value: bodyHeight + radius }
+    },
+    vertexShader: `
+      varying vec3 vNormal;
+      varying float vY;
+      void main() {
+        // Normal in view space for Fresnel calculation
+        vNormal = normalize(normalMatrix * normal);
+        vY = position.y;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float uHeight;
+      varying vec3 vNormal;
+      varying float vY;
+      
+      void main() {
+        // Fresnel Effect: glow more at grazing angles (edges)
+        float fresnel = pow(1.0 - abs(vNormal.z), 2.2);
+        
+        // Vertical Gradient: glow more at the bottom skirt
+        float bottomGlow = smoothstep(uHeight, 0.0, vY);
+        
+        // Restored to the beloved original 0.1 base opacity for the pure glow
+        float baseOpacity = 0.1;           
+        float rimOpacity = fresnel * 0.8;  
+        float skirtOpacity = bottomGlow * 0.25; 
+        
+        float finalAlpha = baseOpacity + rimOpacity + skirtOpacity;
+        
+        // Color shift: make the extreme edges slightly white for intense heat/energy look
+        vec3 finalColor = mix(uColor, vec3(1.0), fresnel * 0.35);
+        
+        gl_FragColor = vec4(finalColor, finalAlpha);
+      }
+    `
+  };
+
+  const shellMaterial = new THREE.ShaderMaterial({
+    uniforms: ghostShader.uniforms,
+    vertexShader: ghostShader.vertexShader,
+    fragmentShader: ghostShader.fragmentShader,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+
   const shell = new THREE.Mesh(bodyGeo, shellMaterial);
+  shell.renderOrder = 2; // Ensure the glow is drawn ON TOP of the core
   group.add(shell);
 
-  // --- Inner Holographic Core ---
-  const innerShell = new THREE.Mesh(
-    bodyGeo, 
-    new THREE.MeshBasicMaterial({
-      color: color,
-      transparent: true,
-      opacity: 0.18,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-      depthWrite: false
-    })
-  );
-  innerShell.scale.set(0.96, 0.96, 0.96);
-  group.add(innerShell);
+  // --- Inner Obscuring Core ---
+  // A pure black core acts as a neutral "dimming shield" for the background.
+  // This gives the physical opacity you want without adding ANY color intensity 
+  // or "plastic" feeling to the delicate glass hologram effect on the outside.
+  const coreMaterial = new THREE.MeshBasicMaterial({
+    color: 0x000000, // Pure black to prevent color pollution
+    transparent: true,
+    opacity: 0.85, 
+    blending: THREE.NormalBlending,
+    depthWrite: false
+  });
+  
+  const innerCore = new THREE.Mesh(bodyGeo, coreMaterial);
+  innerCore.scale.set(0.98, 0.98, 0.98);
+  innerCore.renderOrder = 1; // Draw before the glow
+  group.add(innerCore);
 
   // --- Glowing White Eyes ---
   function createSpectralEye(posX) {
     const eyeGroup = new THREE.Group();
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.55, 32, 32), eyeMaterial);
+    
+    // Core Pupil
+    const pupil = new THREE.Mesh(
+      new THREE.SphereGeometry(0.55, 32, 32), 
+      new THREE.MeshBasicMaterial({ color: 0xffffff })
+    );
     pupil.scale.set(1, 1, 0.2); 
     
+    // Soft Bloom Halo
+    const halo = new THREE.Mesh(
+      new THREE.SphereGeometry(0.85, 32, 32),
+      new THREE.MeshBasicMaterial({ 
+        color: 0xffffff, 
+        transparent: true, 
+        opacity: 0.15, 
+        blending: THREE.AdditiveBlending, 
+        depthWrite: false 
+      })
+    );
+    halo.scale.set(1, 1, 0.2);
+    halo.position.z = -0.05;
+    
     eyeGroup.add(pupil);
+    eyeGroup.add(halo);
+    
     eyeGroup.position.set(posX, bodyHeight + 0.8, radius * 0.92);
     eyeGroup.rotation.y = posX > 0 ? 0.4 : -0.4;
     return eyeGroup;
