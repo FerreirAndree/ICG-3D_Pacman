@@ -143,30 +143,36 @@ export function createGhost(color = 0xff0044) {
   const ghostShader = {
     uniforms: {
       uColor: { value: new THREE.Color(color) },
-      uHeight: { value: bodyHeight + radius }
+      uHeight: { value: bodyHeight },
+      // Mathematically calculate the exact surface coordinates of the eyes on the dome
+      uEyeRight: { value: new THREE.Vector3(0.8, bodyHeight + 0.65, Math.sqrt(radius*radius - 0.8*0.8 - 0.65*0.65)) },
+      uEyeLeft: { value: new THREE.Vector3(-0.8, bodyHeight + 0.65, Math.sqrt(radius*radius - 0.8*0.8 - 0.65*0.65)) }
     },
     vertexShader: `
       varying vec3 vNormal;
-      varying float vY;
+      varying vec3 vLocalPos;
       void main() {
         // Normal in view space for Fresnel calculation
         vNormal = normalize(normalMatrix * normal);
-        vY = position.y;
+        vLocalPos = position;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
     fragmentShader: `
       uniform vec3 uColor;
       uniform float uHeight;
+      uniform vec3 uEyeRight;
+      uniform vec3 uEyeLeft;
+      
       varying vec3 vNormal;
-      varying float vY;
+      varying vec3 vLocalPos;
       
       void main() {
         // Fresnel Effect: glow more at grazing angles (edges)
         float fresnel = pow(1.0 - abs(vNormal.z), 2.2);
         
         // Vertical Gradient: glow more at the bottom skirt
-        float bottomGlow = smoothstep(uHeight, 0.0, vY);
+        float bottomGlow = smoothstep(uHeight, 0.0, vLocalPos.y);
         
         // Restored to the beloved original 0.1 base opacity for the pure glow
         float baseOpacity = 0.1;           
@@ -175,8 +181,31 @@ export function createGhost(color = 0xff0044) {
         
         float finalAlpha = baseOpacity + rimOpacity + skirtOpacity;
         
-        // Color shift: make the extreme edges slightly white for intense heat/energy look
+        // Base color shift
         vec3 finalColor = mix(uColor, vec3(1.0), fresnel * 0.35);
+        
+        // --- Shader Eyes (Seamlessly painted onto the curvature) ---
+        // Only draw on the front half of the ghost
+        if (vLocalPos.z > 0.0) {
+           float dR = distance(vLocalPos, uEyeRight);
+           float dL = distance(vLocalPos, uEyeLeft);
+           float dEye = min(dR, dL);
+           
+           // Smaller, softer eyes
+           float eyeCoreRadius = 0.42; 
+           float eyeHaloRadius = 0.8;
+           
+           float eyeCore = 1.0 - smoothstep(eyeCoreRadius - 0.02, eyeCoreRadius, dEye);
+           float eyeHalo = 1.0 - smoothstep(eyeCoreRadius, eyeHaloRadius, dEye);
+           
+           // Dim the eyes significantly when viewed from the inside (back of the head)
+           float eyeIntensity = gl_FrontFacing ? 1.0 : 0.2;
+           
+           // Paint the eyes over the shell color (pure white from front, dim pinkish from back)
+           finalColor = mix(finalColor, vec3(1.0), eyeCore * eyeIntensity);
+           // Add halo brightness and solid opacity for the core, scaled by intensity
+           finalAlpha += ((eyeHalo * 0.15) + (eyeCore * 0.85)) * eyeIntensity; 
+        }
         
         gl_FragColor = vec4(finalColor, finalAlpha);
       }
@@ -198,11 +227,8 @@ export function createGhost(color = 0xff0044) {
   group.add(shell);
 
   // --- Inner Obscuring Core ---
-  // A pure black core acts as a neutral "dimming shield" for the background.
-  // This gives the physical opacity you want without adding ANY color intensity 
-  // or "plastic" feeling to the delicate glass hologram effect on the outside.
   const coreMaterial = new THREE.MeshBasicMaterial({
-    color: 0x000000, // Pure black to prevent color pollution
+    color: 0x000000, 
     transparent: true,
     opacity: 0.85, 
     blending: THREE.NormalBlending,
@@ -211,43 +237,8 @@ export function createGhost(color = 0xff0044) {
   
   const innerCore = new THREE.Mesh(bodyGeo, coreMaterial);
   innerCore.scale.set(0.98, 0.98, 0.98);
-  innerCore.renderOrder = 1; // Draw before the glow
+  innerCore.renderOrder = 1; 
   group.add(innerCore);
-
-  // --- Glowing White Eyes ---
-  function createSpectralEye(posX) {
-    const eyeGroup = new THREE.Group();
-    
-    // Core Pupil
-    const pupil = new THREE.Mesh(
-      new THREE.SphereGeometry(0.55, 32, 32), 
-      new THREE.MeshBasicMaterial({ color: 0xffffff })
-    );
-    pupil.scale.set(1, 1, 0.2); 
-    
-    // Soft Bloom Halo
-    const halo = new THREE.Mesh(
-      new THREE.SphereGeometry(0.85, 32, 32),
-      new THREE.MeshBasicMaterial({ 
-        color: 0xffffff, 
-        transparent: true, 
-        opacity: 0.15, 
-        blending: THREE.AdditiveBlending, 
-        depthWrite: false 
-      })
-    );
-    halo.scale.set(1, 1, 0.2);
-    halo.position.z = -0.05;
-    
-    eyeGroup.add(pupil);
-    eyeGroup.add(halo);
-    
-    eyeGroup.position.set(posX, bodyHeight + 0.8, radius * 0.92);
-    eyeGroup.rotation.y = posX > 0 ? 0.4 : -0.4;
-    return eyeGroup;
-  }
-  
-  group.add(createSpectralEye(0.8), createSpectralEye(-0.8));
 
   // --- Animation Settings ---
   const waves = 6;
