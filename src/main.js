@@ -209,7 +209,7 @@ ghostPodium.position.set(GHOST_X, 3.5, HERO_Z);
 showcase.add(ghostPodium);
 
 const ghost = createGhost(0xff0044); // Blinky Red
-ghost.position.set(GHOST_X, 8.5, HERO_Z);
+ghost.position.set(GHOST_X, 4.8, HERO_Z);
 ghost.rotation.y = -Math.PI / 4; 
 showcase.add(ghost);
 
@@ -560,6 +560,12 @@ function animate() {
   // Update Entities
   if (pacman && pacman.userData.update) {
     pacman.userData.update(elapsedTime);
+  }
+  if (ghost && ghost.userData.update) {
+    ghost.userData.update(elapsedTime);
+  }
+  if (pellet && pellet.userData.update) {
+    pellet.userData.update(elapsedTime);
   }
 
   if (isEditorMode) {

@@ -109,6 +109,8 @@ export function createPacman() {
   return group;
 }
 
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+
 /**
  * Creates a high-fidelity 'Cyber-Phantom' Ghost
  */
@@ -117,87 +119,116 @@ export function createGhost(color = 0xff0044) {
 
   // --- Materials ---
   const shellMaterial = new THREE.MeshPhysicalMaterial({
-    color: color,
-    metalness: 0.1,
-    roughness: 0.1,
-    transmission: 0.4,
-    thickness: 1.0,
-    ior: 1.45,
+    color: 0x000000,
     emissive: color,
-    emissiveIntensity: 0.2,
-    clearcoat: 1.0,
-    transparent: true
-  });
-
-  const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x080808, metalness: 0.9 });
-  const neonMaterial = new THREE.MeshBasicMaterial({ color: color });
-  
-  const coreMaterial = new THREE.MeshStandardMaterial({
-    color: color,
-    emissive: color,
-    emissiveIntensity: 5.0,
+    emissiveIntensity: 1.0,
+    transmission: 0.98,   
+    opacity: 1.0,
     transparent: true,
-    opacity: 0.9
+    roughness: 0.01,
+    ior: 1.1,
+    thickness: 1.5,
+    side: THREE.DoubleSide,
+    depthWrite: false
   });
 
-  // --- Geometry ---
-  const domeGeo = new THREE.CapsuleGeometry(3.0, 2.5, 4, 24);
-  const coreGeo = new THREE.SphereGeometry(0.8, 16, 16);
+  const eyeMaterial = new THREE.MeshBasicMaterial({ 
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.98
+  });
+
+  // --- Geometry Construction (Bottom at Y=0) ---
+  const radius = 1.9;
+  const bodyHeight = 4.5; // Shorter, better proportion
+  const radialSegments = 64;
+  const heightSegments = 32;
+
+  const domeGeo = new THREE.SphereGeometry(radius, radialSegments, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+  domeGeo.translate(0, bodyHeight, 0);
+
+  const cylinderGeo = new THREE.CylinderGeometry(radius, radius, bodyHeight, radialSegments, heightSegments, true);
+  cylinderGeo.translate(0, bodyHeight / 2, 0);
   
-  // --- Body Shell ---
-  const shell = new THREE.Mesh(domeGeo, shellMaterial);
-  shell.position.y = 1.0;
+  // Merge cleanly to keep normal smoothing across the body
+  const bodyGeo = mergeGeometries([domeGeo, cylinderGeo]);
+  bodyGeo.attributes.position.setUsage(THREE.DynamicDrawUsage);
+  
+  const posAttr = bodyGeo.attributes.position;
+  const originalYs = new Float32Array(posAttr.count);
+  for (let i = 0; i < posAttr.count; i++) {
+    originalYs[i] = posAttr.getY(i);
+  }
+
+  const shell = new THREE.Mesh(bodyGeo, shellMaterial);
   group.add(shell);
 
-  // --- Internal Skeleton ---
-  const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 5, 12), frameMaterial);
-  group.add(spine);
+  // --- Inner Holographic Core ---
+  const innerShell = new THREE.Mesh(
+    bodyGeo, 
+    new THREE.MeshBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 0.18,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    })
+  );
+  innerShell.scale.set(0.96, 0.96, 0.96);
+  group.add(innerShell);
 
-  // --- Tactical HUD Eyes (Rectangular) ---
+  // --- Glowing White Eyes ---
   function createSpectralEye(posX) {
     const eyeGroup = new THREE.Group();
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.1), neonMaterial);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), neonMaterial);
-    pupil.position.z = 0.1;
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.55, 32, 32), eyeMaterial);
+    pupil.scale.set(1, 1, 0.2); 
     
-    eyeGroup.add(frame, pupil);
-    eyeGroup.position.set(posX, 2.2, 2.2);
-    eyeGroup.rotation.y = posX > 0 ? 0.3 : -0.3;
+    eyeGroup.add(pupil);
+    eyeGroup.position.set(posX, bodyHeight + 0.8, radius * 0.92);
+    eyeGroup.rotation.y = posX > 0 ? 0.4 : -0.4;
     return eyeGroup;
   }
-  group.add(createSpectralEye(1.1), createSpectralEye(-1.1));
+  
+  group.add(createSpectralEye(0.8), createSpectralEye(-0.8));
 
-  // --- Floating "Tentacles" (Segments) ---
-  const segments = [];
-  const segGeo = new THREE.BoxGeometry(0.6, 1.2, 0.6);
-  for (let i = 0; i < 8; i++) {
-    const segment = new THREE.Mesh(segGeo, frameMaterial);
-    const angle = (i / 8) * Math.PI * 2;
-    segment.position.set(Math.cos(angle) * 2.2, -1.8, Math.sin(angle) * 2.2);
-    group.add(segment);
-    segments.push(segment);
-  }
+  // --- Animation Settings ---
+  const waves = 6;
+  const waveAmplitude = 0.35; 
+  const waveSpeed = 4.2;
+  
+  let baseY = null;
 
-  // --- Core ---
-  const mainCore = new THREE.Mesh(coreGeo, coreMaterial);
-  group.add(mainCore);
-
-  // --- Animation ---
   group.userData = {
     type: 'ghost',
     update: (time) => {
-      // Floating/Levitation
-      group.position.y += Math.sin(time * 2) * 0.005;
+      // Capture the initial Y position set by the main scene
+      if (baseY === null) {
+        baseY = group.position.y;
+      }
       
-      // Spectral Wave for segments
-      segments.forEach((seg, i) => {
-        seg.position.y = -1.8 + Math.sin(time * 3 + i * 0.8) * 0.4;
-        seg.rotation.y = time * 2;
-      });
-
-      // Pulse Core
-      mainCore.scale.setScalar(1 + Math.sin(time * 8) * 0.15);
-      mainCore.material.emissiveIntensity = 4 + Math.sin(time * 8) * 2;
+      // Levitate around the base position
+      group.position.y = baseY + Math.sin(time * 2.2) * 0.2; 
+      
+      for (let i = 0; i < posAttr.count; i++) {
+        const origY = originalYs[i];
+        
+        // Target vertices at the very bottom (base is exactly at y=0 now)
+        if (origY < 2.5) {
+          const x = posAttr.getX(i);
+          const z = posAttr.getZ(i);
+          const angle = Math.atan2(z, x);
+          
+          // Standard smooth sine wave for harmonious, rounded scallops
+          const wave = Math.sin(angle * waves + time * waveSpeed);
+          const blend = Math.pow((2.5 - origY) / 2.5, 1.1);
+          
+          // Apply wave smoothly up and down
+          posAttr.setY(i, origY + (wave * waveAmplitude * blend));
+        }
+      }
+      bodyGeo.computeVertexNormals();
+      posAttr.needsUpdate = true;
     }
   };
 
