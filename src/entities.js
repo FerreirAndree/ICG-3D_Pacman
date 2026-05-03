@@ -392,3 +392,51 @@ export function createPellet() {
 
   return group;
 }
+
+/**
+ * Creates a standard 'Cyber-Pellet' (Normal Dot)
+ * Designed to be highly performant so hundreds can exist in the maze.
+ */
+export function createStandardPellet() {
+  const group = new THREE.Group();
+  const color = 0xffaa00; // Same warm orange as the power pellet
+
+  // A simple sphere using a Standard material to catch scene lights
+  // but with high emissive so it glows on its own
+  const coreMaterial = new THREE.MeshStandardMaterial({
+    color: color,
+    emissive: color,
+    emissiveIntensity: 1.5,
+    roughness: 0.2,
+    metalness: 0.8
+  });
+
+  // A highly performant additive glow shell (no actual lights)
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: color,
+    transparent: true,
+    opacity: 0.3,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+
+  // Keep geometry simple: 16x16 segments
+  const geometry = new THREE.SphereGeometry(0.35, 16, 16);
+  
+  const core = new THREE.Mesh(geometry, coreMaterial);
+  const glow = new THREE.Mesh(geometry, glowMaterial);
+  glow.scale.set(1.4, 1.4, 1.4);
+  
+  group.add(core);
+  group.add(glow);
+
+  // Subtle floating animation
+  group.userData = {
+    type: 'standard_pellet',
+    update: (time) => {
+      group.position.y += Math.sin(time * 4) * 0.005;
+    }
+  };
+
+  return group;
+}

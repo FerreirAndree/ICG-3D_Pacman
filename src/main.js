@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildShowcase, showcaseLayout, createMazePiece, createPedestal, TILE_SIZE } from './mazePieces.js';
-import { createPacman, createGhost, createPellet } from './entities.js';
+import { createPacman, createGhost, createPellet, createStandardPellet } from './entities.js';
 import './style.css';
 
 const scene = new THREE.Scene();
@@ -212,6 +212,17 @@ showcase.add(pelletPodium);
 const pellet = createPellet();
 pellet.position.set(PELLET_X, 7.5, PELLET_Z);
 showcase.add(pellet);
+
+// Standard Pellet (Column 1.5, Front Row)
+const STD_PELLET_X = 12; // Centered between Power Pellet and Inky
+const STD_PELLET_Z = 144; // Front row, same as Scared Ghost
+const stdPelletPodium = createPedestal();
+stdPelletPodium.position.set(STD_PELLET_X, 3.5, STD_PELLET_Z);
+showcase.add(stdPelletPodium);
+
+const stdPellet = createStandardPellet();
+stdPellet.position.set(STD_PELLET_X, 5.5, STD_PELLET_Z); // Slightly lower hover than characters
+showcase.add(stdPellet);
 
 // --- Ghost Wing (2x2 Grid of the Classic Ghosts) ---
 const GHOST_X = HERO_X + 24; // Column 2
@@ -621,6 +632,9 @@ function animate() {
   }
   if (pellet && pellet.userData.update) {
     pellet.userData.update(elapsedTime);
+  }
+  if (stdPellet && stdPellet.userData.update) {
+    stdPellet.userData.update(elapsedTime);
   }
 
   if (isEditorMode) {
