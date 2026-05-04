@@ -104,6 +104,10 @@ const uiHtml = `
         <span class="key-hint">5</span>
         Teleport
       </div>
+      <div class="piece-card" data-type="ghostchamber">
+        <span class="key-hint">6</span>
+        Chamber
+      </div>
     </div>
   </div>
 `;
@@ -462,7 +466,8 @@ window.addEventListener('keydown', (e) => {
     '2': 'corner',
     '3': 'tjunction',
     '4': 'crossroad',
-    '5': 'teleport'
+    '5': 'teleport',
+    '6': 'ghostchamber'
   };
   if (pieceKeys[key]) {
     selectPiece(pieceKeys[key]);

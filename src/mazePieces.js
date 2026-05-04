@@ -549,21 +549,26 @@ export function createMazePiece(type) {
 
   return piece;
 }
-
 function createGhostChamberPiece() {
   const piece = new THREE.Group();
   piece.userData.type = 'ghostchamber';
 
-  // 1. Scaled Pedestal
-  const customPedestal = createPedestal();
-  customPedestal.scale.set(1.7, 1, 1.7); // Scaled equally in X and Z
-  piece.add(customPedestal);
+  // We wrap the entire visual structure in a group and shift it backwards (South).
+  // This allows the massive dome to occupy the empty space behind the connection point,
+  // while the short connection pipe perfectly snaps to the tile boundary at exactly Z = -9.0.
+  const visualGroup = new THREE.Group();
+  visualGroup.position.z = 4.5; 
+  piece.add(visualGroup);
 
-  // 2. Chamber Geometry (Perfectly Rounded Glass Dome)
+  // 1. Standard Pedestal (Matches all other pieces perfectly)
+  // Added directly to piece so it remains exactly at (0,0) with no scaling.
+  piece.add(createPedestal());
+
+  // 2. Chamber Geometry (Maximized Rectangular Glass Dome)
   const r = PIPE_RADIUS; // 2.55
   const w = 18.9; 
-  const d = 18.9;
-  const cornerR = 5;
+  const d = 13.9; // Maximized vertical space
+  const cornerR = 4.0; 
   
   const outerShape = new THREE.Shape();
   const x = -w / 2;
@@ -588,10 +593,8 @@ function createGhostChamberPiece() {
   };
   const shellGeo = new THREE.ExtrudeGeometry(outerShape, extrudeSettings);
   
-  // Clone the glass material to apply the custom "Hole-Punch" shader
   const shellMat = sharedMaterials.glass.clone();
   shellMat.onBeforeCompile = (shader) => {
-    // 1. Pass the raw local geometry position to the fragment shader
     shader.vertexShader = shader.vertexShader.replace(
       '#include <common>',
       `#include <common>
@@ -602,8 +605,6 @@ function createGhostChamberPiece() {
       `#include <begin_vertex>
       vRawPos = position;` 
     );
-
-    // 2. Intercept the fragment shader to mathematically discard pixels
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <common>',
       `#include <common>
@@ -612,17 +613,11 @@ function createGhostChamberPiece() {
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <dithering_fragment>',
       `#include <dithering_fragment>
-      
       // The shell is rotated -90deg on X, so Local Y becomes World -Z.
-      // We only want to cut a hole in the North face (where Local Y > 9.0).
-      if (vRawPos.y > 9.0) { 
-        // The shell is positioned at HUB_HEIGHT, so Local Z is centered perfectly on the pipe.
-        // We calculate the 2D distance from the center of the pipe.
-        float distToPipeCenter = length(vec2(vRawPos.x, vRawPos.z));
-        
-        // If the pixel is inside the pipe radius (2.55), DELETE IT.
-        if (distToPipeCenter < 2.45) { 
-          discard;
+      if (vRawPos.y > 6.9) { 
+        float distToPipeCenter = sqrt(vRawPos.x * vRawPos.x + vRawPos.z * vRawPos.z);
+        if (distToPipeCenter < 2.45) {
+            discard;
         }
       }
       `
@@ -630,15 +625,14 @@ function createGhostChamberPiece() {
   };
 
   const shell = new THREE.Mesh(shellGeo, shellMat);
-  shell.rotation.x = -Math.PI / 2; 
-  // Center it at HUB_HEIGHT
-  shell.position.set(0, HUB_HEIGHT, 0);
-  piece.add(shell);
+  shell.rotation.x = -Math.PI / 2;
+  shell.position.y = HUB_HEIGHT;
+  visualGroup.add(shell);
 
-  // 3. Wide Walkway Floor
+  // 3. Rectangular Walkway Floor
   const floorW = 18;
-  const floorD = 18;
-  const floorR = 4;
+  const floorD = 14;
+  const floorR = 3;
   
   const floorShape = new THREE.Shape();
   const fx = -floorW / 2;
@@ -661,9 +655,9 @@ function createGhostChamberPiece() {
   const floorMesh = new THREE.Mesh(floorGeo, sharedMaterials.walkway);
   floorMesh.rotation.x = -Math.PI / 2;
   floorMesh.position.set(0, HUB_HEIGHT - PIPE_RADIUS + 0.14, 0);
-  piece.add(floorMesh);
+  visualGroup.add(floorMesh);
 
-  // 4. Perimeter LEDs and Internal Spawn Pads
+  // 4. Perimeter LEDs and Spawn Pads
   const points2d = floorShape.getPoints(24);
   const points3d = points2d.map(p => new THREE.Vector3(p.x, 0, p.y));
   const ledCurve = new THREE.CatmullRomCurve3(points3d, true); 
@@ -671,15 +665,15 @@ function createGhostChamberPiece() {
   const ledGeo = new THREE.TubeGeometry(ledCurve, 128, 0.06, 8, true);
   const ledMesh = setPulse(new THREE.Mesh(ledGeo, sharedMaterials.led), 1.4, 0.34, 1.2, 0);
   ledMesh.position.set(0, HUB_HEIGHT - PIPE_RADIUS + 0.3, 0);
-  piece.add(ledMesh);
+  visualGroup.add(ledMesh);
 
   const ledGlowGeo = new THREE.TubeGeometry(ledCurve, 128, 0.4, 8, true);
   const ledGlowMesh = new THREE.Mesh(ledGlowGeo, sharedMaterials.ledGlow);
   ledGlowMesh.position.set(0, HUB_HEIGHT - PIPE_RADIUS + 0.14, 0);
-  piece.add(ledGlowMesh);
+  visualGroup.add(ledGlowMesh);
 
-  // Internal Spawn Pads (2x2 Grid) - Ghost Shaped!
-  const ghostR = 2.2;
+  // Ghost Shapes
+  const ghostR = 1.8;
   const ghostShape = new THREE.Shape();
   ghostShape.absarc(0, 0.5, ghostR, 0, Math.PI, false); // Head
   ghostShape.lineTo(-ghostR, -1.5); // Left drop
@@ -695,52 +689,51 @@ function createGhostChamberPiece() {
 
   const spawnPadGeo = new THREE.TubeGeometry(ghostCurve, 64, 0.08, 8, true);
   const spawnGlowGeo = new THREE.ShapeGeometry(ghostShape, 16);
-  const padOffsets = [-4.5, 4.5];
+  
+  // Rectangular Pad Placement
+  const padOffsetsX = [-4.5, 4.5];
+  const padOffsetsZ = [-3.0, 3.0];
 
-  // Scared Mouth Path
   const mouthPath = new THREE.CurvePath();
   const mPts = [
-    new THREE.Vector3(-0.8, 0, -0.2),
-    new THREE.Vector3(-0.4, 0, 0.1),
+    new THREE.Vector3(-0.6, 0, -0.2),
+    new THREE.Vector3(-0.3, 0, 0.1),
     new THREE.Vector3(0, 0, -0.2),
-    new THREE.Vector3(0.4, 0, 0.1),
-    new THREE.Vector3(0.8, 0, -0.2)
+    new THREE.Vector3(0.3, 0, 0.1),
+    new THREE.Vector3(0.6, 0, -0.2)
   ];
   mouthPath.add(new THREE.LineCurve3(mPts[0], mPts[1]));
   mouthPath.add(new THREE.LineCurve3(mPts[1], mPts[2]));
   mouthPath.add(new THREE.LineCurve3(mPts[2], mPts[3]));
   mouthPath.add(new THREE.LineCurve3(mPts[3], mPts[4]));
-  const mouthGeo = new THREE.TubeGeometry(mouthPath, 16, 0.06, 8, false);
+  const mouthGeo = new THREE.TubeGeometry(mouthPath, 16, 0.05, 8, false);
 
-  const eyeGeo = new THREE.TorusGeometry(0.3, 0.06, 8, 16);
-
+  const eyeGeo = new THREE.TorusGeometry(0.25, 0.05, 8, 16);
+  
   let xIndex = 0;
-  padOffsets.forEach((x) => {
+  padOffsetsX.forEach((x) => {
     let zIndex = 0;
-    padOffsets.forEach((z) => {
-      const isScared = ((xIndex + zIndex) % 2 === 1); // True checkerboard pattern
+    padOffsetsZ.forEach((z) => {
+      const isScared = ((xIndex + zIndex) % 2 === 1);
 
-      // The solid LED ghost outline
       const ring = setPulse(new THREE.Mesh(spawnPadGeo, sharedMaterials.led), 1.2, 0.4, 1.8, Math.random() * Math.PI);
       ring.position.set(x, HUB_HEIGHT - PIPE_RADIUS + 0.24, z);
       
-      // The faint inner glow plate
       const plate = new THREE.Mesh(spawnGlowGeo, sharedMaterials.ledGlow);
-      plate.rotation.x = Math.PI / 2; // +PI/2 aligns the XY shape with the XZ curve mapping
+      plate.rotation.x = Math.PI / 2;
       plate.position.set(x, HUB_HEIGHT - PIPE_RADIUS + 0.24, z);
       
-      piece.add(ring, plate);
+      visualGroup.add(ring, plate);
 
-      // Face
       const faceGroup = new THREE.Group();
       
       const leftEye = setPulse(new THREE.Mesh(eyeGeo, sharedMaterials.led), 1.4, 0.3, 2.0, Math.random());
       leftEye.rotation.x = Math.PI / 2;
-      leftEye.position.set(-0.8, 0, 0.8);
+      leftEye.position.set(-0.7, 0, 0.6);
       
       const rightEye = setPulse(new THREE.Mesh(eyeGeo, sharedMaterials.led), 1.4, 0.3, 2.0, Math.random());
       rightEye.rotation.x = Math.PI / 2;
-      rightEye.position.set(0.8, 0, 0.8);
+      rightEye.position.set(0.7, 0, 0.6);
 
       faceGroup.add(leftEye, rightEye);
 
@@ -750,7 +743,7 @@ function createGhostChamberPiece() {
       }
 
       faceGroup.position.set(x, HUB_HEIGHT - PIPE_RADIUS + 0.24, z);
-      piece.add(faceGroup);
+      visualGroup.add(faceGroup);
 
       zIndex++;
     });
@@ -758,12 +751,10 @@ function createGhostChamberPiece() {
   });
 
   // 5. Connection Pipe (North)
-  // The glass shell reaches Z = -12. 
-  // Let's add a pipe stub that sticks out to Z = -16.
-  piece.add(
+  visualGroup.add(
     createPipeSegment('north', {
-      length: 6,
-      startOffset: 10
+      length: 4.0, 
+      startOffset: 9.5
     })
   );
 
@@ -793,10 +784,8 @@ function createGhostChamberPiece() {
   
   const offsets = [-1.2, -0.4, 0.4, 1.2]; 
   
-  // Horizontal lasers
   offsets.forEach(y => {
     const w = Math.sqrt(Math.pow(PIPE_RADIUS - 0.15, 2) - Math.pow(y, 2)) * 2;
-    
     const laserGeo = new THREE.CylinderGeometry(0.04, 0.04, w, 8);
     const laser = setPulse(new THREE.Mesh(laserGeo, laserMat), 1.3, 0.7, 2.0, Math.random());
     laser.rotation.z = Math.PI / 2;
@@ -809,11 +798,9 @@ function createGhostChamberPiece() {
     
     doorGroup.add(laser, glow);
   });
-
-  // Vertical lasers
+  
   offsets.forEach(x => {
     const h = Math.sqrt(Math.pow(PIPE_RADIUS - 0.15, 2) - Math.pow(x, 2)) * 2;
-    
     const laserGeo = new THREE.CylinderGeometry(0.04, 0.04, h, 8);
     const laser = setPulse(new THREE.Mesh(laserGeo, laserMat), 1.3, 0.7, 2.0, Math.random());
     laser.position.x = x;
@@ -825,9 +812,9 @@ function createGhostChamberPiece() {
     doorGroup.add(laser, glow);
   });
   
-  // Placed close to the end of the pipe, leaving a pronounced lip
-  doorGroup.position.set(0, HUB_HEIGHT, -15.0); 
-  piece.add(doorGroup);
+  // Placed close to the end of the pipe (at -13.1 in visualGroup space)
+  doorGroup.position.set(0, HUB_HEIGHT, -13.1); 
+  visualGroup.add(doorGroup);
 
   return piece;
 }
