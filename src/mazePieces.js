@@ -362,66 +362,13 @@ function createCornerPiece() {
   return piece;
 }
 
-function pointInsideCylinder(point, descriptor, radius = PIPE_RADIUS + 0.05) {
-  const dx = point.x - descriptor.position.x;
-  const dy = point.y - descriptor.position.y;
-  const dz = point.z - descriptor.position.z;
 
-  if (descriptor.axis === 'x') {
-    return Math.abs(dx) <= descriptor.length * 0.5 + 0.05 && dy * dy + dz * dz < radius * radius;
-  }
-
-  return Math.abs(dz) <= descriptor.length * 0.5 + 0.05 && dx * dx + dy * dy < radius * radius;
-}
-
-function clipCylinderShellGeometry(descriptor, otherDescriptors) {
-  const heightSegments = Math.max(32, Math.floor(descriptor.length * 2.5));
-  const geometry = createTransformedCylinderGeometry(
-    descriptor.axis,
-    descriptor.length,
-    PIPE_RADIUS,
-    true,
-    descriptor.position,
-    128,
-    heightSegments
-  ).toNonIndexed();
-
-  const positions = geometry.getAttribute('position').array;
-  const normals = geometry.getAttribute('normal').array;
-  const keptPositions = [];
-  const keptNormals = [];
-
-  for (let index = 0; index < positions.length; index += 9) {
-    const centroid = new THREE.Vector3(
-      (positions[index] + positions[index + 3] + positions[index + 6]) / 3,
-      (positions[index + 1] + positions[index + 4] + positions[index + 7]) / 3,
-      (positions[index + 2] + positions[index + 5] + positions[index + 8]) / 3
-    );
-
-    const hiddenByOtherTube = otherDescriptors.some((otherDescriptor) => pointInsideCylinder(centroid, otherDescriptor));
-
-    if (hiddenByOtherTube) {
-      continue;
-    }
-
-    for (let offset = 0; offset < 9; offset += 1) {
-      keptPositions.push(positions[index + offset]);
-      keptNormals.push(normals[index + offset]);
-    }
-  }
-
-  const clippedGeometry = new THREE.BufferGeometry();
-  clippedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(keptPositions, 3));
-  clippedGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(keptNormals, 3));
-
-  return clippedGeometry;
-}
 
 function getJunctionDescriptors(type) {
   const descriptors = [
     {
       axis: 'x',
-      length: TILE_SIZE,
+      length: JUNCTION_CLEAR_RADIUS * 2,
       position: new THREE.Vector3(0, HUB_HEIGHT, 0)
     }
   ];
@@ -429,14 +376,14 @@ function getJunctionDescriptors(type) {
   if (type === 'crossroad') {
     descriptors.push({
       axis: 'z',
-      length: TILE_SIZE,
+      length: JUNCTION_CLEAR_RADIUS * 2,
       position: new THREE.Vector3(0, HUB_HEIGHT, 0)
     });
   } else {
     descriptors.push({
       axis: 'z',
-      length: HALF_SPAN,
-      position: new THREE.Vector3(0, HUB_HEIGHT, -HALF_SPAN * 0.5)
+      length: JUNCTION_CLEAR_RADIUS,
+      position: new THREE.Vector3(0, HUB_HEIGHT, -JUNCTION_CLEAR_RADIUS * 0.5)
     });
   }
 
@@ -449,19 +396,78 @@ function getJunctionShellGeometry(type) {
   }
 
   const descriptors = getJunctionDescriptors(type);
-  const clippedShells = descriptors.map((descriptor, index) =>
-    clipCylinderShellGeometry(
-      descriptor,
-      descriptors.filter((_, otherIndex) => otherIndex !== index)
-    )
+  const unclippedShells = descriptors.map((descriptor) =>
+    createTransformedCylinderGeometry(descriptor.axis, descriptor.length, PIPE_RADIUS, true, descriptor.position, 48)
   );
 
-  let mergedShell = mergeGeometries(clippedShells, false);
+  let mergedShell = mergeGeometries(unclippedShells, false);
   mergedShell = mergeVertices(mergedShell, 0.001);
   mergedShell.computeVertexNormals();
   junctionShellGeometryCache.set(type, mergedShell.clone());
 
   return junctionShellGeometryCache.get(type);
+}
+
+const junctionMaterialCache = new Map();
+
+function getJunctionMaterial(type) {
+  if (junctionMaterialCache.has(type)) return junctionMaterialCache.get(type);
+  
+  const mat = sharedMaterials.glass.clone();
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      `#include <common>
+      varying vec3 vRawPos;`
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      vRawPos = position;` 
+    );
+    
+    let condition = '';
+    if (type === 'crossroad') {
+        condition = `
+          float rSq = 2.54 * 2.54; 
+          float dy = vRawPos.y - 3.2; // HUB_HEIGHT
+          float distSqX = dy * dy + vRawPos.z * vRawPos.z;
+          float distSqZ = vRawPos.x * vRawPos.x + dy * dy;
+          // Delete overlapping interiors
+          if (distSqX < rSq || distSqZ < rSq) discard;
+        `;
+    } else if (type === 'tjunction') {
+        condition = `
+          float rSq = 2.54 * 2.54;
+          float dy = vRawPos.y - 3.2; // HUB_HEIGHT
+          float distSqX = dy * dy + vRawPos.z * vRawPos.z;
+          float distSqZ = vRawPos.x * vRawPos.x + dy * dy;
+          
+          if (distSqX < rSq) {
+              // Pixel is inside the X pipe
+              discard;
+          }
+          if (distSqZ < rSq && vRawPos.z < 0.0) {
+              // Pixel is inside the Z pipe (which only exists on the negative Z side)
+              discard;
+          }
+        `;
+    }
+    
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <common>',
+      `#include <common>
+      varying vec3 vRawPos;`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <dithering_fragment>',
+      `#include <dithering_fragment>
+      ${condition}
+      `
+    );
+  };
+  junctionMaterialCache.set(type, mat);
+  return mat;
 }
 
 function createJunctionPiece(type) {
@@ -470,7 +476,7 @@ function createJunctionPiece(type) {
 
   piece.add(createPedestal());
   piece.add(createHub());
-  piece.add(new THREE.Mesh(getJunctionShellGeometry(type), sharedMaterials.glass));
+  piece.add(new THREE.Mesh(getJunctionShellGeometry(type), getJunctionMaterial(type)));
 
   PIECE_CONNECTORS[type].forEach((direction) => {
     piece.add(
