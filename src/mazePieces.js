@@ -25,7 +25,8 @@ const PIECE_CONNECTORS = {
   corner: ['north', 'east'],
   tjunction: ['north', 'east', 'west'],
   crossroad: ['north', 'east', 'south', 'west'],
-  teleport: ['east', 'west']
+  teleport: ['east', 'west'],
+  ghostchamber: ['north']
 };
 
 export const showcaseLayout = [
@@ -33,7 +34,8 @@ export const showcaseLayout = [
   { type: 'corner', position: [-10, 0, 15], rotation: Math.PI / 2 },
   { type: 'crossroad', position: [12, 0, 15], rotation: 0 },
   { type: 'tjunction', position: [26, 0, -5], rotation: Math.PI },
-  { type: 'teleport', position: [1, 0, -22], rotation: 0 }
+  { type: 'teleport', position: [1, 0, -22], rotation: 0 },
+  { type: 'ghostchamber', position: [0, 0, 0], rotation: 0 }
 ];
 
 const sharedMaterials = createMaterials();
@@ -510,6 +512,10 @@ export function createMazePiece(type) {
     return createCornerPiece();
   }
 
+  if (type === 'ghostchamber') {
+    return createGhostChamberPiece();
+  }
+
   if (type === 'tjunction' || type === 'crossroad') {
     return createJunctionPiece(type);
   }
@@ -534,6 +540,288 @@ export function createMazePiece(type) {
     piece.add(createTeleportGate('east'));
     piece.add(createTeleportGate('west'));
   }
+
+  return piece;
+}
+
+function createGhostChamberPiece() {
+  const piece = new THREE.Group();
+  piece.userData.type = 'ghostchamber';
+
+  // 1. Scaled Pedestal
+  const customPedestal = createPedestal();
+  customPedestal.scale.set(1.7, 1, 1.7); // Scaled equally in X and Z
+  piece.add(customPedestal);
+
+  // 2. Chamber Geometry (Perfectly Rounded Glass Dome)
+  const r = PIPE_RADIUS; // 2.55
+  const w = 18.9; 
+  const d = 18.9;
+  const cornerR = 5;
+  
+  const outerShape = new THREE.Shape();
+  const x = -w / 2;
+  const y = -d / 2;
+  outerShape.moveTo(x, y + cornerR);
+  outerShape.lineTo(x, y + d - cornerR);
+  outerShape.quadraticCurveTo(x, y + d, x + cornerR, y + d);
+  outerShape.lineTo(x + w - cornerR, y + d);
+  outerShape.quadraticCurveTo(x + w, y + d, x + w, y + d - cornerR);
+  outerShape.lineTo(x + w, y + cornerR);
+  outerShape.quadraticCurveTo(x + w, y, x + w - cornerR, y);
+  outerShape.lineTo(x + cornerR, y);
+  outerShape.quadraticCurveTo(x, y, x, y + cornerR);
+
+  const extrudeSettings = { 
+    depth: 0.01, 
+    bevelEnabled: true, 
+    bevelThickness: r, 
+    bevelSize: r, 
+    bevelSegments: 20,
+    curveSegments: 24 
+  };
+  const shellGeo = new THREE.ExtrudeGeometry(outerShape, extrudeSettings);
+  
+  // Clone the glass material to apply the custom "Hole-Punch" shader
+  const shellMat = sharedMaterials.glass.clone();
+  shellMat.onBeforeCompile = (shader) => {
+    // 1. Pass the raw local geometry position to the fragment shader
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      `#include <common>
+      varying vec3 vRawPos;`
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      vRawPos = position;` 
+    );
+
+    // 2. Intercept the fragment shader to mathematically discard pixels
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <common>',
+      `#include <common>
+      varying vec3 vRawPos;`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <dithering_fragment>',
+      `#include <dithering_fragment>
+      
+      // The shell is rotated -90deg on X, so Local Y becomes World -Z.
+      // We only want to cut a hole in the North face (where Local Y > 9.0).
+      if (vRawPos.y > 9.0) { 
+        // The shell is positioned at HUB_HEIGHT, so Local Z is centered perfectly on the pipe.
+        // We calculate the 2D distance from the center of the pipe.
+        float distToPipeCenter = length(vec2(vRawPos.x, vRawPos.z));
+        
+        // If the pixel is inside the pipe radius (2.55), DELETE IT.
+        if (distToPipeCenter < 2.45) { 
+          discard;
+        }
+      }
+      `
+    );
+  };
+
+  const shell = new THREE.Mesh(shellGeo, shellMat);
+  shell.rotation.x = -Math.PI / 2; 
+  // Center it at HUB_HEIGHT
+  shell.position.set(0, HUB_HEIGHT, 0);
+  piece.add(shell);
+
+  // 3. Wide Walkway Floor
+  const floorW = 18;
+  const floorD = 18;
+  const floorR = 4;
+  
+  const floorShape = new THREE.Shape();
+  const fx = -floorW / 2;
+  const fy = -floorD / 2;
+  floorShape.moveTo(fx, fy + floorR);
+  floorShape.lineTo(fx, fy + floorD - floorR);
+  floorShape.quadraticCurveTo(fx, fy + floorD, fx + floorR, fy + floorD);
+  floorShape.lineTo(fx + floorW - floorR, fy + floorD);
+  floorShape.quadraticCurveTo(fx + floorW, fy + floorD, fx + floorW, fy + floorD - floorR);
+  floorShape.lineTo(fx + floorW, fy + floorR);
+  floorShape.quadraticCurveTo(fx + floorW, fy, fx + floorW - floorR, fy);
+  floorShape.lineTo(fx + floorR, fy);
+  floorShape.quadraticCurveTo(fx, fy, fx, fy + floorR);
+
+  const floorGeo = new THREE.ExtrudeGeometry(floorShape, { depth: 0.18, bevelEnabled: false, curveSegments: 16 });
+  floorGeo.computeBoundingBox();
+  const zOffset = -0.5 * (floorGeo.boundingBox.max.z - floorGeo.boundingBox.min.z);
+  floorGeo.translate(0, 0, zOffset);
+  
+  const floorMesh = new THREE.Mesh(floorGeo, sharedMaterials.walkway);
+  floorMesh.rotation.x = -Math.PI / 2;
+  floorMesh.position.set(0, HUB_HEIGHT - PIPE_RADIUS + 0.14, 0);
+  piece.add(floorMesh);
+
+  // 4. Perimeter LEDs and Internal Spawn Pads
+  const points2d = floorShape.getPoints(24);
+  const points3d = points2d.map(p => new THREE.Vector3(p.x, 0, p.y));
+  const ledCurve = new THREE.CatmullRomCurve3(points3d, true); 
+  
+  const ledGeo = new THREE.TubeGeometry(ledCurve, 128, 0.06, 8, true);
+  const ledMesh = setPulse(new THREE.Mesh(ledGeo, sharedMaterials.led), 1.4, 0.34, 1.2, 0);
+  ledMesh.position.set(0, HUB_HEIGHT - PIPE_RADIUS + 0.3, 0);
+  piece.add(ledMesh);
+
+  const ledGlowGeo = new THREE.TubeGeometry(ledCurve, 128, 0.4, 8, true);
+  const ledGlowMesh = new THREE.Mesh(ledGlowGeo, sharedMaterials.ledGlow);
+  ledGlowMesh.position.set(0, HUB_HEIGHT - PIPE_RADIUS + 0.14, 0);
+  piece.add(ledGlowMesh);
+
+  // Internal Spawn Pads (2x2 Grid) - Ghost Shaped!
+  const ghostR = 2.2;
+  const ghostShape = new THREE.Shape();
+  ghostShape.absarc(0, 0.5, ghostR, 0, Math.PI, false); // Head
+  ghostShape.lineTo(-ghostR, -1.5); // Left drop
+  ghostShape.lineTo(-ghostR / 2, -0.5); // Inner left
+  ghostShape.lineTo(0, -1.5); // Center drop
+  ghostShape.lineTo(ghostR / 2, -0.5); // Inner right
+  ghostShape.lineTo(ghostR, -1.5); // Right drop
+  ghostShape.lineTo(ghostR, 0.5); // Back to head
+
+  const ghostPoints2d = ghostShape.getPoints(16);
+  const ghostPoints3d = ghostPoints2d.map(p => new THREE.Vector3(p.x, 0, p.y));
+  const ghostCurve = new THREE.CatmullRomCurve3(ghostPoints3d, true);
+
+  const spawnPadGeo = new THREE.TubeGeometry(ghostCurve, 64, 0.08, 8, true);
+  const spawnGlowGeo = new THREE.ShapeGeometry(ghostShape, 16);
+  const padOffsets = [-4.5, 4.5];
+
+  // Scared Mouth Path
+  const mouthPath = new THREE.CurvePath();
+  const mPts = [
+    new THREE.Vector3(-0.8, 0, -0.2),
+    new THREE.Vector3(-0.4, 0, 0.1),
+    new THREE.Vector3(0, 0, -0.2),
+    new THREE.Vector3(0.4, 0, 0.1),
+    new THREE.Vector3(0.8, 0, -0.2)
+  ];
+  mouthPath.add(new THREE.LineCurve3(mPts[0], mPts[1]));
+  mouthPath.add(new THREE.LineCurve3(mPts[1], mPts[2]));
+  mouthPath.add(new THREE.LineCurve3(mPts[2], mPts[3]));
+  mouthPath.add(new THREE.LineCurve3(mPts[3], mPts[4]));
+  const mouthGeo = new THREE.TubeGeometry(mouthPath, 16, 0.06, 8, false);
+
+  const eyeGeo = new THREE.TorusGeometry(0.3, 0.06, 8, 16);
+
+  let xIndex = 0;
+  padOffsets.forEach((x) => {
+    let zIndex = 0;
+    padOffsets.forEach((z) => {
+      const isScared = ((xIndex + zIndex) % 2 === 1); // True checkerboard pattern
+
+      // The solid LED ghost outline
+      const ring = setPulse(new THREE.Mesh(spawnPadGeo, sharedMaterials.led), 1.2, 0.4, 1.8, Math.random() * Math.PI);
+      ring.position.set(x, HUB_HEIGHT - PIPE_RADIUS + 0.24, z);
+      
+      // The faint inner glow plate
+      const plate = new THREE.Mesh(spawnGlowGeo, sharedMaterials.ledGlow);
+      plate.rotation.x = Math.PI / 2; // +PI/2 aligns the XY shape with the XZ curve mapping
+      plate.position.set(x, HUB_HEIGHT - PIPE_RADIUS + 0.24, z);
+      
+      piece.add(ring, plate);
+
+      // Face
+      const faceGroup = new THREE.Group();
+      
+      const leftEye = setPulse(new THREE.Mesh(eyeGeo, sharedMaterials.led), 1.4, 0.3, 2.0, Math.random());
+      leftEye.rotation.x = Math.PI / 2;
+      leftEye.position.set(-0.8, 0, 0.8);
+      
+      const rightEye = setPulse(new THREE.Mesh(eyeGeo, sharedMaterials.led), 1.4, 0.3, 2.0, Math.random());
+      rightEye.rotation.x = Math.PI / 2;
+      rightEye.position.set(0.8, 0, 0.8);
+
+      faceGroup.add(leftEye, rightEye);
+
+      if (isScared) {
+        const mouth = setPulse(new THREE.Mesh(mouthGeo, sharedMaterials.led), 1.4, 0.3, 2.0, Math.random());
+        faceGroup.add(mouth);
+      }
+
+      faceGroup.position.set(x, HUB_HEIGHT - PIPE_RADIUS + 0.24, z);
+      piece.add(faceGroup);
+
+      zIndex++;
+    });
+    xIndex++;
+  });
+
+  // 5. Connection Pipe (North)
+  // The glass shell reaches Z = -12. 
+  // Let's add a pipe stub that sticks out to Z = -16.
+  piece.add(
+    createPipeSegment('north', {
+      length: 6,
+      startOffset: 10
+    })
+  );
+
+  // 6. Laser Forcefield Door
+  const doorGroup = new THREE.Group();
+  
+  const forcefieldMat = new THREE.MeshBasicMaterial({
+    color: 0xff0000, 
+    transparent: true,
+    opacity: 0.15,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const forcefieldGeo = new THREE.CircleGeometry(PIPE_RADIUS - 0.1, 32);
+  const forcefield = setPulse(new THREE.Mesh(forcefieldGeo, forcefieldMat), 1.1, 0.1, 1.5, 0);
+  doorGroup.add(forcefield);
+  
+  const laserMat = new THREE.MeshBasicMaterial({ color: 0xff2222 });
+  const laserGlowMat = new THREE.MeshBasicMaterial({
+    color: 0xff0000,
+    transparent: true,
+    opacity: 0.5,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  
+  const offsets = [-1.2, -0.4, 0.4, 1.2]; 
+  
+  // Horizontal lasers
+  offsets.forEach(y => {
+    const w = Math.sqrt(Math.pow(PIPE_RADIUS - 0.15, 2) - Math.pow(y, 2)) * 2;
+    
+    const laserGeo = new THREE.CylinderGeometry(0.04, 0.04, w, 8);
+    const laser = setPulse(new THREE.Mesh(laserGeo, laserMat), 1.3, 0.7, 2.0, Math.random());
+    laser.rotation.z = Math.PI / 2;
+    laser.position.y = y;
+    
+    const glowGeo = new THREE.CylinderGeometry(0.12, 0.12, w, 8);
+    const glow = new THREE.Mesh(glowGeo, laserGlowMat);
+    glow.rotation.z = Math.PI / 2;
+    glow.position.y = y;
+    
+    doorGroup.add(laser, glow);
+  });
+
+  // Vertical lasers
+  offsets.forEach(x => {
+    const h = Math.sqrt(Math.pow(PIPE_RADIUS - 0.15, 2) - Math.pow(x, 2)) * 2;
+    
+    const laserGeo = new THREE.CylinderGeometry(0.04, 0.04, h, 8);
+    const laser = setPulse(new THREE.Mesh(laserGeo, laserMat), 1.3, 0.7, 2.0, Math.random());
+    laser.position.x = x;
+    
+    const glowGeo = new THREE.CylinderGeometry(0.12, 0.12, h, 8);
+    const glow = new THREE.Mesh(glowGeo, laserGlowMat);
+    glow.position.x = x;
+    
+    doorGroup.add(laser, glow);
+  });
+  
+  // Placed close to the end of the pipe, leaving a pronounced lip
+  doorGroup.position.set(0, HUB_HEIGHT, -15.0); 
+  piece.add(doorGroup);
 
   return piece;
 }
