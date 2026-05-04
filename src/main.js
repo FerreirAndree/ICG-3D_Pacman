@@ -426,6 +426,7 @@ function updateGhostPiece() {
   removeGhostPiece();
   if (currentPieceType === null) return;
   ghostPiece = createMazePiece(currentPieceType);
+  ghostPiece.rotation.y = currentRotation;
   ghostPiece.traverse(obj => {
     if (obj.material) {
       obj.material = obj.material.clone();
