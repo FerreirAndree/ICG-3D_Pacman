@@ -490,27 +490,110 @@ function createJunctionPiece(type) {
   return piece;
 }
 
-function createTeleportGate(direction) {
+function createEventHorizon(direction) {
   const axis = axisForDirection(direction);
   const sign = directionSign(direction);
-  const gate = new THREE.Group();
+  const group = new THREE.Group();
+  const offset = sign * (HALF_SPAN - 0.3);
 
-  const portalRing = setPulse(new THREE.Mesh(sharedGeometries.portalRing, sharedMaterials.teleport), 1.3, 0.22, 1.7);
-  const portalFace = setPulse(new THREE.Mesh(sharedGeometries.portalFace, sharedMaterials.teleport), 1.05, 0.22, 2.1);
+  // Single disc with a spiral black-hole shader
+  const discGeo = new THREE.CircleGeometry(PIPE_RADIUS * 0.96, 64);
+  const discMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 }
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      varying vec2 vUv;
+
+      void main() {
+        vec2 uv = vUv - 0.5;
+        float r = length(uv) * 2.0;
+        float a = atan(uv.y, uv.x);
+
+        // Singularity hole mask
+        float hole = smoothstep(0.2, 0.25, r);
+        
+        // Vortex physics: the "suction" twist
+        float twist = 8.0 / (r + 0.1);
+        
+        // Create a grid of "Digital Pieces"
+        float rFreq = 14.0;
+        float aFreq = 10.0;
+        float rCoord = r * rFreq - uTime * 6.0;
+        float aCoord = a * aFreq + twist;
+        
+        vec2 grid = fract(vec2(rCoord, aCoord));
+        float piece = step(0.6, grid.x) * step(0.2, grid.y);
+        
+        // Deep Saturated Blue
+        vec3 deepBlue = vec3(0.05, 0.2, 1.0);
+        
+        // Subtle energy flicker
+        float flicker = 0.85 + 0.15 * sin(uTime * 12.0 + rCoord * 10.0);
+
+        // Intensity
+        float intensity = 2.2;
+
+        // Final color
+        vec3 color = deepBlue * intensity * flicker;
+
+        // Space between pieces is unfilled (alpha = 0)
+        float alpha = piece * hole * (1.0 - smoothstep(0.92, 1.0, r));
+        
+        // Use discard for alphaTest compatibility
+        if (alpha < 0.1) discard;
+
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `,
+    transparent: false,
+    alphaTest: 0.1,
+    side: THREE.DoubleSide,
+    depthWrite: true
+  });
+
+  const disc = new THREE.Mesh(discGeo, discMat);
+
+  // Self-updating time uniform
+  disc.onBeforeRender = () => {
+    discMat.uniforms.uTime.value = performance.now() * 0.001;
+  };
+
+  // Subtle outer edge glow ring (Cyber Cyan)
+  const edgeGeo = new THREE.RingGeometry(PIPE_RADIUS * 0.88, PIPE_RADIUS * 1.05, 32);
+  const edgeMat = new THREE.MeshBasicMaterial({
+    color: 0x00ffff,
+    transparent: true,
+    opacity: 0.12,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const edgeGlow = new THREE.Mesh(edgeGeo, edgeMat);
+  edgeGlow.renderOrder = 10;
 
   if (axis === 'x') {
-    portalRing.position.set(sign * (HALF_SPAN - 0.65), HUB_HEIGHT, 0);
-    portalFace.position.set(sign * (HALF_SPAN - 0.64), HUB_HEIGHT, 0);
-    portalRing.rotation.y = Math.PI / 2;
-    portalFace.rotation.y = sign > 0 ? -Math.PI / 2 : Math.PI / 2;
+    disc.position.set(offset, HUB_HEIGHT, 0);
+    disc.rotation.y = Math.PI / 2;
+    edgeGlow.position.set(offset + sign * 0.05, HUB_HEIGHT, 0);
+    edgeGlow.rotation.y = Math.PI / 2;
   } else {
-    portalRing.position.set(0, HUB_HEIGHT, sign * (HALF_SPAN - 0.65));
-    portalFace.position.set(0, HUB_HEIGHT, sign * (HALF_SPAN - 0.64));
-    portalFace.rotation.y = sign > 0 ? Math.PI : 0;
+    disc.position.set(0, HUB_HEIGHT, offset);
+    disc.rotation.y = sign > 0 ? Math.PI : 0;
+    edgeGlow.position.set(0, HUB_HEIGHT, offset + sign * 0.05);
+    edgeGlow.rotation.y = sign > 0 ? Math.PI : 0;
   }
 
-  gate.add(portalRing, portalFace);
-  return gate;
+  group.add(disc, edgeGlow);
+  return group;
 }
 
 export function createMazePiece(type) {
@@ -543,8 +626,9 @@ export function createMazePiece(type) {
   });
 
   if (type === 'teleport') {
-    piece.add(createTeleportGate('east'));
-    piece.add(createTeleportGate('west'));
+    // West end: Event Horizon (the warp terminus)
+    piece.add(createEventHorizon('west'));
+    // East end: Normal open pipe (no cap — connects to the maze)
   }
 
   return piece;
