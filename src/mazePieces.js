@@ -20,7 +20,7 @@ const CORNER_BEND_RADIUS = PIPE_RADIUS * 1.4;
 const JUNCTION_CLEAR_RADIUS = PIPE_RADIUS * 1.08;
 const PIPE_SHELL_THICKNESS = 0.22;
 
-const PIECE_CONNECTORS = {
+export const PIECE_CONNECTORS = {
   straight: ['north', 'south'],
   corner: ['north', 'east'],
   tjunction: ['north', 'east', 'west'],

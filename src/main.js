@@ -8,7 +8,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { buildShowcase, showcaseLayout, createMazePiece, createPedestal, TILE_SIZE } from './mazePieces.js';
+import { buildShowcase, showcaseLayout, createMazePiece, createPedestal, TILE_SIZE, PIECE_CONNECTORS } from './mazePieces.js';
 import { createPacman, createGhost, createPellet, createStandardPellet } from './entities.js';
 import './style.css';
 
@@ -58,7 +58,10 @@ const uiHtml = `
       <button class="btn btn-primary" id="btn-toggle-mode">Open Editor</button>
       
       <div class="editor-only-controls" id="editor-only-controls" style="display: none; flex-direction: column; gap: 20px;">
-        <button class="btn" id="btn-export">Export JSON</button>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn" id="btn-export" style="flex: 1;">Export</button>
+          <button class="btn" id="btn-import" style="flex: 1;">Import</button>
+        </div>
 
         <div class="control-group">
           <div class="control-label">Zoom Level</div>
@@ -107,6 +110,19 @@ const uiHtml = `
       <div class="piece-card" data-type="ghostchamber">
         <span class="key-hint">6</span>
         Chamber
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="export-modal">
+    <div class="modal-content">
+      <h3 class="modal-title">Export Maze</h3>
+      <div class="modal-buttons">
+        <button class="btn" id="btn-modal-copy">Copy to Clipboard</button>
+        <button class="btn" id="btn-modal-download">Download File</button>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-close" id="btn-modal-close">Close</button>
       </div>
     </div>
   </div>
@@ -421,6 +437,110 @@ document.querySelectorAll('.piece-card').forEach(card => {
   });
 });
 
+// --- Validation Helpers ---
+function getAbsoluteDirections(relDirs, rotation) {
+  return relDirs.map(dir => {
+    let vec;
+    if (dir === 'north') vec = {x: 0, z: -1};
+    else if (dir === 'south') vec = {x: 0, z: 1};
+    else if (dir === 'east') vec = {x: 1, z: 0};
+    else if (dir === 'west') vec = {x: -1, z: 0};
+    
+    const x = vec.x * Math.cos(rotation) + vec.z * Math.sin(rotation);
+    const z = -vec.x * Math.sin(rotation) + vec.z * Math.cos(rotation);
+    
+    return {x: Math.round(x), z: Math.round(z)};
+  });
+}
+
+function isPlacementLegal(type, position, rotation) {
+  if (!position) return true;
+  
+  const existing = editorMaze.children.find(c => c.position.x === position.x && c.position.z === position.z);
+  if (existing) return false;
+  
+  const chambers = editorMaze.children.filter(c => c.userData.type === 'ghostchamber');
+  
+  // Rule: Max 1 Ghost Chamber
+  if (type === 'ghostchamber' && chambers.length > 0) return false;
+  
+  if (type === 'ghostchamber') {
+    for (const piece of editorMaze.children) {
+      if (!isCompatibleWithChamber({position, rotation, type}, piece)) return false;
+    }
+  } else {
+    for (const chamber of chambers) {
+      if (!isCompatibleWithChamber(chamber, {position, rotation, type})) return false;
+    }
+  }
+  
+  // Portal Piece rules
+  const teleports = editorMaze.children.filter(c => c.userData.type === 'teleport');
+  
+  // Check if new piece is compatible with existing teleports
+  for (const teleport of teleports) {
+    if (!isCompatibleWithTeleport(teleport, {position, rotation, type})) return false;
+  }
+  
+  // If the new piece is a teleport, check if it's compatible with all existing pieces
+  if (type === 'teleport') {
+    for (const piece of editorMaze.children) {
+      if (!isCompatibleWithTeleport({position, rotation, type}, piece)) return false;
+    }
+  }
+  
+  return true;
+}
+
+function isCompatibleWithChamber(chamber, piece) {
+  const dist = Math.sqrt(Math.pow(chamber.position.x - piece.position.x, 2) + Math.pow(chamber.position.z - piece.position.z, 2));
+  if (Math.abs(dist - TILE_SIZE) > 1) return true;
+  
+  const dx = Math.round((piece.position.x - chamber.position.x) / TILE_SIZE);
+  const dz = Math.round((piece.position.z - chamber.position.z) / TILE_SIZE);
+  
+  const chamberOpening = getAbsoluteDirections(['north'], chamber.userData ? chamber.userData.rotation : chamber.rotation)[0];
+  
+  if (dx === chamberOpening.x && dz === chamberOpening.z) return true;
+  
+  const pieceType = piece.userData ? piece.userData.type : piece.type;
+  const pieceRotation = piece.userData ? piece.userData.rotation : piece.rotation;
+  
+  const pieceConnectors = getAbsoluteDirections(PIECE_CONNECTORS[pieceType], pieceRotation);
+  
+  for (const conn of pieceConnectors) {
+    if (conn.x === -dx && conn.z === -dz) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+function isCompatibleWithTeleport(teleport, piece) {
+  const dist = Math.sqrt(Math.pow(teleport.position.x - piece.position.x, 2) + Math.pow(teleport.position.z - piece.position.z, 2));
+  if (Math.abs(dist - TILE_SIZE) > 1) return true;
+  
+  const dx = Math.round((piece.position.x - teleport.position.x) / TILE_SIZE);
+  const dz = Math.round((piece.position.z - teleport.position.z) / TILE_SIZE);
+  
+  const portalDir = getAbsoluteDirections(['west'], teleport.userData ? teleport.userData.rotation : teleport.rotation)[0];
+  
+  if (dx === portalDir.x && dz === portalDir.z) {
+    const pieceType = piece.userData ? piece.userData.type : piece.type;
+    const pieceRotation = piece.userData ? piece.userData.rotation : piece.rotation;
+    const pieceConnectors = getAbsoluteDirections(PIECE_CONNECTORS[pieceType], pieceRotation);
+    
+    for (const conn of pieceConnectors) {
+      if (conn.x === -dx && conn.z === -dz) {
+        return false;
+      }
+    }
+  }
+  
+  return true;
+}
+
 // --- Ghost Piece ---
 function updateGhostPiece() {
   removeGhostPiece();
@@ -432,6 +552,8 @@ function updateGhostPiece() {
       obj.material = obj.material.clone();
       obj.material.transparent = true;
       obj.material.opacity = 0.4;
+      if (obj.material.color) obj.userData.originalColor = obj.material.color.clone();
+      if (obj.material.emissive) obj.userData.originalEmissive = obj.material.emissive.clone();
     }
   });
   scene.add(ghostPiece);
@@ -540,6 +662,9 @@ function placePiece() {
   const existing = editorMaze.children.find(c => c.position.x === pos.x && c.position.z === pos.z);
   if (existing) return;
 
+  // Check legality
+  if (!isPlacementLegal(currentPieceType, pos, currentRotation)) return;
+
   const piece = createMazePiece(currentPieceType);
   piece.position.set(pos.x, 0, pos.z);
   piece.rotation.y = currentRotation;
@@ -556,15 +681,88 @@ function deletePieceAtCursor() {
 
 // --- Export ---
 document.querySelector('#btn-export').addEventListener('click', () => {
+  document.querySelector('#export-modal').classList.add('active');
+});
+
+// --- Modal Buttons ---
+document.querySelector('#btn-modal-close').addEventListener('click', () => {
+  document.querySelector('#export-modal').classList.remove('active');
+});
+
+// Close on backdrop click
+document.querySelector('#export-modal').addEventListener('click', (e) => {
+  if (e.target === document.querySelector('#export-modal')) {
+    document.querySelector('#export-modal').classList.remove('active');
+  }
+});
+
+document.querySelector('#btn-modal-copy').addEventListener('click', () => {
   const data = editorMaze.children.map(c => ({
     type: c.userData.type,
     position: [c.position.x, c.position.y, c.position.z],
     rotation: c.userData.rotation
   }));
   const json = JSON.stringify(data, null, 2);
-  console.log("--- EXPORTED MAZE DATA ---");
-  console.log(json);
-  alert("Maze data exported to Console (F12). Copy the array to use in showcaseLayout!");
+  
+  navigator.clipboard.writeText(json).then(() => {
+    const btn = document.querySelector('#btn-modal-copy');
+    const originalText = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => {
+      btn.textContent = originalText;
+    }, 2000);
+  }).catch(err => {
+    alert("Failed to copy to clipboard. Check console.");
+    console.error('Could not copy text: ', err);
+  });
+});
+
+document.querySelector('#btn-modal-download').addEventListener('click', () => {
+  const data = editorMaze.children.map(c => ({
+    type: c.userData.type,
+    position: [c.position.x, c.position.y, c.position.z],
+    rotation: c.userData.rotation
+  }));
+  const json = JSON.stringify(data, null, 2);
+  
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'maze.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+// --- Import ---
+document.querySelector('#btn-import').addEventListener('click', () => {
+  const json = prompt("Paste your exported maze JSON here:");
+  if (!json) return;
+  
+  try {
+    const data = JSON.parse(json);
+    
+    // Clear current maze
+    while(editorMaze.children.length > 0) {
+      editorMaze.remove(editorMaze.children[0]);
+    }
+    
+    // Rebuild
+    data.forEach(item => {
+      const piece = createMazePiece(item.type);
+      piece.position.set(item.position[0], item.position[1], item.position[2]);
+      piece.rotation.y = item.rotation;
+      piece.userData = { type: item.type, rotation: item.rotation };
+      editorMaze.add(piece);
+    });
+    
+    alert("Maze imported successfully!");
+  } catch (e) {
+    alert("Failed to parse JSON. Make sure it's a valid export.");
+    console.error(e);
+  }
 });
 
 const floatingDust = createDustField();
@@ -652,6 +850,19 @@ function animate() {
       if (pos) {
         ghostPiece.position.set(pos.x, 0, pos.z);
         ghostPiece.visible = true;
+
+        const legal = isPlacementLegal(currentPieceType, pos, currentRotation);
+        ghostPiece.traverse(obj => {
+          if (obj.material && obj.userData.originalColor) {
+            if (!legal) {
+              obj.material.color.set(0xff0000);
+              if (obj.material.emissive) obj.material.emissive.set(0xaa0000);
+            } else {
+              obj.material.color.copy(obj.userData.originalColor);
+              if (obj.material.emissive) obj.material.emissive.copy(obj.userData.originalEmissive);
+            }
+          }
+        });
       } else {
         ghostPiece.visible = false;
       }
