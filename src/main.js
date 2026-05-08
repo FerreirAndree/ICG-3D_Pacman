@@ -25,8 +25,8 @@ const GALLERY_VIEW = {
 };
 
 const EDITOR_VIEW = {
-  pos: [50, 65, 120],  // Standard top-down-ish build view
-  target: [50, 0, 50]
+  pos: [0, 65, 120],  // Centered build view
+  target: [0, 0, 0]
 };
 
 camera.position.set(...GALLERY_VIEW.pos);
@@ -62,6 +62,10 @@ const uiHtml = `
           <button class="btn" id="btn-export" style="flex: 1;">Export</button>
           <button class="btn" id="btn-import" style="flex: 1;">Import</button>
         </div>
+        <div style="display: flex; gap: 10px; margin-top: -10px;">
+          <button class="btn" id="btn-apply-shift" style="flex: 1; display: none; background: rgba(0, 255, 136, 0.2); color: #00ff88; border-color: rgba(0, 255, 136, 0.3);">Apply</button>
+          <button class="btn" id="btn-shift-map" style="flex: 1;">Shift Map</button>
+        </div>
 
         <div class="control-group">
           <div class="control-label">Zoom Level</div>
@@ -74,12 +78,13 @@ const uiHtml = `
           <div class="toggle-option" data-view="2d">Bird's Eye</div>
         </div>
         
-        <div class="hotkey-list">
+        <div class="hotkey-list" id="hotkey-list">
           <div class="hotkey-item"><span>Free Mode</span> <span class="hotkey-key">V</span></div>
           <div class="hotkey-item"><span>Place</span> <span class="hotkey-key">Click / Space</span></div>
           <div class="hotkey-item"><span>Rotate</span> <span class="hotkey-key">R</span></div>
           <div class="hotkey-item"><span>Delete</span> <span class="hotkey-key">X</span></div>
           <div class="hotkey-item"><span>Pan</span> <span class="hotkey-key">WASD / Arrows</span></div>
+          <div class="hotkey-item"><span>View</span> <span class="hotkey-key">Tab</span></div>
         </div>
       </div>
     </div>
@@ -126,6 +131,7 @@ const uiHtml = `
       </div>
     </div>
   </div>
+
 `;
 appContainer.insertAdjacentHTML('beforeend', uiHtml);
 
@@ -326,6 +332,8 @@ window.getCameraConfig = () => {
 // --- Editor State ---
 let isEditorMode = false;
 let isBirdseye = false;
+let isShiftMode = false;
+let savedView = null;
 let currentPieceType = 'straight';
 let currentRotation = 0;
 let ghostPiece = null;
@@ -392,13 +400,13 @@ function toggleCamera(type) {
   
   if (isBirdseye) {
     slider.classList.add('right');
-    camera.position.set(0, 100, 0);
+    camera.position.set(0, 160, 0);
     controls.target.set(0, 0, 0);
     controls.enableRotate = false;
   } else {
     slider.classList.remove('right');
-    camera.position.set(36, 40, 49);
-    controls.target.set(0, 0, 0);
+    camera.position.set(...EDITOR_VIEW.pos);
+    controls.target.set(...EDITOR_VIEW.target);
     controls.enableRotate = true;
   }
 }
@@ -593,6 +601,41 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (!isEditorMode) return;
+
+  if (key === 'tab') {
+    e.preventDefault();
+    toggleCamera(isBirdseye ? '3d' : '2d');
+  }
+
+  // --- Shift Mode ---
+  if (isShiftMode) {
+    const shiftSpeed = TILE_SIZE;
+    if (key === 'arrowup' || key === 'w') {
+      editorMaze.position.z -= shiftSpeed;
+    }
+    if (key === 'arrowdown' || key === 's') {
+      editorMaze.position.z += shiftSpeed;
+    }
+    if (key === 'arrowleft' || key === 'a') {
+      editorMaze.position.x -= shiftSpeed;
+    }
+    if (key === 'arrowright' || key === 'd') {
+      editorMaze.position.x += shiftSpeed;
+    }
+    if (key === 'enter') {
+      const offset = editorMaze.position.clone();
+      editorMaze.children.forEach(c => {
+        c.position.add(offset);
+      });
+      editorMaze.position.set(0, 0, 0);
+      exitShiftMode();
+    }
+    if (key === 'escape') {
+      editorMaze.position.set(0, 0, 0);
+      exitShiftMode();
+    }
+    return; // Block other inputs in shift mode
+  }
   
   // --- Piece Selection Hotkeys ---
   const pieceKeys = {
@@ -646,8 +689,8 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('mousedown', (e) => {
-  if (!isEditorMode || e.button !== 0) return;
-  if (e.target.closest('.bottom-bar') || e.target.closest('.top-controls')) return;
+  if (!isEditorMode || isShiftMode || e.button !== 0) return;
+  if (e.target.closest('.bottom-bar') || e.target.closest('.top-controls') || e.target.closest('#command-deck')) return;
   placePiece();
 });
 
@@ -775,6 +818,116 @@ document.querySelector('#btn-import').addEventListener('click', () => {
     console.error(e);
   }
 });
+
+// --- Shift Map ---
+document.querySelector('#btn-shift-map').addEventListener('click', () => {
+  if (!isEditorMode) return;
+  
+  isShiftMode = !isShiftMode;
+  const btn = document.querySelector('#btn-shift-map');
+  const applyBtn = document.querySelector('#btn-apply-shift');
+  btn.blur(); // Remove focus to prevent Enter key from triggering click
+  
+  const bottomBar = document.querySelector('.bottom-bar');
+  const hotkeyList = document.querySelector('#hotkey-list');
+  const cameraToggle = document.querySelector('.segmented-toggle');
+  const zoomSlider = document.querySelector('#zoom-slider').parentElement;
+  const exportImportContainer = document.querySelector('#btn-export').parentElement;
+  
+  if (isShiftMode) {
+    btn.textContent = 'Cancel';
+    btn.style.background = 'rgba(255, 68, 68, 0.2)';
+    btn.style.color = '#ff4444';
+    btn.style.borderColor = 'rgba(255, 68, 68, 0.3)';
+    
+    if (applyBtn) applyBtn.style.display = 'block';
+    if (bottomBar) bottomBar.style.display = 'none';
+    if (cameraToggle) cameraToggle.style.display = 'none';
+    if (zoomSlider) zoomSlider.style.display = 'none';
+    if (exportImportContainer) exportImportContainer.style.display = 'none';
+    
+    if (hotkeyList) {
+      hotkeyList.innerHTML = `
+        <div class="hotkey-item"><span>Move</span> <span class="hotkey-key">Arrows / WASD</span></div>
+        <div class="hotkey-item"><span>Apply</span> <span class="hotkey-key" style="background: rgba(0, 255, 136, 0.2); color: #00ff88;">Enter</span></div>
+        <div class="hotkey-item"><span>Cancel</span> <span class="hotkey-key" style="background: rgba(255, 68, 68, 0.2); color: #ff4444;">Esc</span></div>
+      `;
+    }
+    
+    // Save view
+    savedView = {
+      pos: camera.position.clone(),
+      target: controls.target.clone()
+    };
+    
+    // Switch to Bird's Eye
+    controls.target.set(0, 0, 0);
+    camera.position.set(0, 300, 0);
+    controls.update();
+    
+    // Hide ghost piece if active
+    if (ghostPiece) ghostPiece.visible = false;
+  } else {
+    editorMaze.position.set(0, 0, 0);
+    exitShiftMode();
+  }
+});
+
+document.querySelector('#btn-apply-shift').addEventListener('click', () => {
+  if (!isShiftMode) return;
+  
+  const offset = editorMaze.position.clone();
+  editorMaze.children.forEach(c => {
+    c.position.add(offset);
+  });
+  editorMaze.position.set(0, 0, 0);
+  exitShiftMode();
+});
+
+function exitShiftMode() {
+  isShiftMode = false;
+  const btn = document.querySelector('#btn-shift-map');
+  btn.textContent = 'Shift Map';
+  btn.classList.remove('btn-primary');
+  btn.style.background = '';
+  btn.style.color = '';
+  btn.style.borderColor = '';
+  
+  const applyBtn = document.querySelector('#btn-apply-shift');
+  if (applyBtn) applyBtn.style.display = 'none';
+  
+  const bottomBar = document.querySelector('.bottom-bar');
+  const hotkeyList = document.querySelector('#hotkey-list');
+  const cameraToggle = document.querySelector('.segmented-toggle');
+  const zoomSlider = document.querySelector('#zoom-slider').parentElement;
+  const exportImportContainer = document.querySelector('#btn-export').parentElement;
+  
+  if (bottomBar) bottomBar.style.display = 'flex';
+  if (cameraToggle) cameraToggle.style.display = 'flex';
+  if (zoomSlider) zoomSlider.style.display = 'flex';
+  if (exportImportContainer) exportImportContainer.style.display = 'flex';
+  
+  if (hotkeyList) {
+    hotkeyList.innerHTML = `
+      <div class="hotkey-item"><span>Free Mode</span> <span class="hotkey-key">V</span></div>
+      <div class="hotkey-item"><span>Place</span> <span class="hotkey-key">Click / Space</span></div>
+      <div class="hotkey-item"><span>Rotate</span> <span class="hotkey-key">R</span></div>
+      <div class="hotkey-item"><span>Delete</span> <span class="hotkey-key">X</span></div>
+      <div class="hotkey-item"><span>Pan</span> <span class="hotkey-key">WASD / Arrows</span></div>
+      <div class="hotkey-item"><span>View</span> <span class="hotkey-key">Tab</span></div>
+    `;
+  }
+  
+  // Restore view
+  if (savedView) {
+    camera.position.copy(savedView.pos);
+    controls.target.copy(savedView.target);
+    controls.update();
+  }
+  
+  // Show ghost piece
+  if (ghostPiece) ghostPiece.visible = true;
+}
 
 const floatingDust = createDustField();
 scene.add(floatingDust);
