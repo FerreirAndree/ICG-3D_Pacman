@@ -159,7 +159,6 @@ const floor = new THREE.Mesh(
   })
 );
 floor.rotation.x = -Math.PI / 2;
-scene.add(floor);
 
 const floorInnerGlow = new THREE.Mesh(
   new THREE.CircleGeometry(72, 64),
@@ -172,7 +171,6 @@ const floorInnerGlow = new THREE.Mesh(
 );
 floorInnerGlow.rotation.x = -Math.PI / 2;
 floorInnerGlow.position.y = 0.03;
-scene.add(floorInnerGlow);
 
 const farRing = new THREE.Mesh(
   new THREE.RingGeometry(88, 106, 72),
@@ -185,7 +183,6 @@ const farRing = new THREE.Mesh(
 );
 farRing.rotation.x = -Math.PI / 2;
 farRing.position.y = 0.02;
-scene.add(farRing);
 
 function createGroundGlow(radius, color, opacity) {
   const glow = new THREE.Mesh(
@@ -204,6 +201,20 @@ function createGroundGlow(radius, color, opacity) {
 
 const showcase = buildShowcase(showcaseLayout);
 const editorMaze = new THREE.Group();
+
+// Move floor meshes into showcase group
+showcase.add(floor);
+showcase.add(floorInnerGlow);
+showcase.add(farRing);
+
+// Invisible plane for editor raycasting
+const raycastPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(TILE_SIZE * 20, TILE_SIZE * 20),
+  new THREE.MeshBasicMaterial({ visible: false })
+);
+raycastPlane.rotation.x = -Math.PI / 2;
+scene.add(raycastPlane);
+
 scene.add(showcase);
 scene.add(editorMaze);
 
@@ -642,7 +653,7 @@ window.addEventListener('mousedown', (e) => {
 
 function getGridIntersection() {
   raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObject(floor);
+  const intersects = raycaster.intersectObject(raycastPlane);
   if (intersects.length > 0) {
     const p = intersects[0].point;
     return {
