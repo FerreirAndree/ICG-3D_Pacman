@@ -237,16 +237,11 @@ const GAME_CAMERA_POSITION_DAMPING = 7.0;
 const GAME_CAMERA_TARGET_DAMPING = 8.5;
 const GAME_CAMERA_TURN_SPEED = 8.5;
 const GAME_CAMERA_REVERSE_TURN_SPEED = 11.5;
-const GAME_CAMERA_DISTANCE = 5.75;
+const GAME_CAMERA_DISTANCE = 1.8;
 const GAME_CAMERA_HEIGHT = -0.85;
 const GAME_CAMERA_LOOK_AHEAD = 4.25;
 const GAME_CAMERA_TARGET_HEIGHT = 0.35;
-const GAME_CAMERA_TRAIL_MAX_POINTS = 220;
-const GAME_CAMERA_TRAIL_MIN_SPACING = 0.2;
-const GAME_CAMERA_POSITION_POP_THRESHOLD = 0.55;
-const GAME_CAMERA_POSITION_POP_DAMPING = 18;
-
-const gameCameraTrail = [];
+const GAME_CAMERA_CENTERED_LOOK_AHEAD = 0.75;
 
 function rotateFlatVectorToward(current, desired, maxRadians) {
   const from = current.clone().setY(0).normalize();
@@ -259,51 +254,13 @@ function rotateFlatVectorToward(current, desired, maxRadians) {
   return from.applyAxisAngle(new THREE.Vector3(0, 1, 0), step).normalize();
 }
 
-function resetGameCameraTrail() {
-  gameCameraTrail.length = 0;
-
-  if (gameController) {
-    gameCameraTrail.push(gameController.getCameraTarget());
-  }
-}
-
-function updateGameCameraTrail() {
-  if (!gameController) return;
-
-  const position = gameController.getCameraTarget();
-  const previous = gameCameraTrail[gameCameraTrail.length - 1];
-
-  if (!previous || previous.distanceTo(position) >= GAME_CAMERA_TRAIL_MIN_SPACING) {
-    gameCameraTrail.push(position);
-  } else {
-    previous.copy(position);
-  }
-
-  while (gameCameraTrail.length > GAME_CAMERA_TRAIL_MAX_POINTS) {
-    gameCameraTrail.shift();
-  }
-}
-
 function sampleGameCameraTrail(distanceBehind, fallbackForward) {
-  const latest = gameCameraTrail[gameCameraTrail.length - 1];
-  if (!latest) return gameController.getCameraTarget();
+  return gameController.getCameraTrailPoint(distanceBehind, fallbackForward);
+}
 
-  let remainingDistance = distanceBehind;
-
-  for (let index = gameCameraTrail.length - 1; index > 0; index -= 1) {
-    const current = gameCameraTrail[index];
-    const previous = gameCameraTrail[index - 1];
-    const segmentLength = current.distanceTo(previous);
-
-    if (segmentLength >= remainingDistance) {
-      const t = remainingDistance / segmentLength;
-      return current.clone().lerp(previous, t);
-    }
-
-    remainingDistance -= segmentLength;
-  }
-
-  return latest.clone().addScaledVector(fallbackForward, -distanceBehind);
+function getGameCameraRailPoint(distanceBehind, fallbackForward) {
+  const routePoint = gameController.getRouteCameraPoint(-distanceBehind, false);
+  return routePoint || sampleGameCameraTrail(distanceBehind, fallbackForward);
 }
 
 // Move floor meshes into showcase group
@@ -549,7 +506,6 @@ function enterGameMode() {
   controls.enableRotate = false;
 
   gameController.reset(gameGraph.getTileAt(0, 0));
-  resetGameCameraTrail();
   gameCameraState.forward.copy(gameController.getFollowDirection());
   gameCameraState.target.copy(gameController.getCameraTarget());
   gameCameraState.position.copy(camera.position);
@@ -610,7 +566,6 @@ function updateGameCamera(deltaTime, snap = false) {
   if (!gameController) return;
 
   const target = gameController.getCameraTarget();
-  updateGameCameraTrail();
 
   const desiredForward = gameController.getFollowDirection()
     .multiplyScalar(isGameLookBackActive ? -1 : 1);
@@ -633,11 +588,21 @@ function updateGameCamera(deltaTime, snap = false) {
     ? target.clone()
       .addScaledVector(gameCameraState.forward, -GAME_CAMERA_DISTANCE)
       .add(new THREE.Vector3(0, GAME_CAMERA_HEIGHT, 0))
-    : sampleGameCameraTrail(GAME_CAMERA_DISTANCE, gameCameraState.forward)
+    : getGameCameraRailPoint(GAME_CAMERA_DISTANCE, gameCameraState.forward)
       .add(new THREE.Vector3(0, GAME_CAMERA_HEIGHT, 0));
-  const desiredTarget = target.clone()
-    .add(gameCameraState.forward.clone().multiplyScalar(GAME_CAMERA_LOOK_AHEAD))
-    .add(new THREE.Vector3(0, GAME_CAMERA_TARGET_HEIGHT, 0));
+  const anchoredTarget = target.clone().add(new THREE.Vector3(0, GAME_CAMERA_TARGET_HEIGHT, 0));
+  const centeredForward = anchoredTarget.clone().sub(desiredPosition).setY(0);
+  if (centeredForward.lengthSq() > 0.0001) {
+    centeredForward.normalize();
+  } else {
+    centeredForward.copy(gameCameraState.forward);
+  }
+
+  const desiredTarget = isGameLookBackActive
+    ? target.clone()
+      .addScaledVector(gameCameraState.forward, GAME_CAMERA_LOOK_AHEAD)
+      .add(new THREE.Vector3(0, GAME_CAMERA_TARGET_HEIGHT, 0))
+    : anchoredTarget.clone().addScaledVector(centeredForward, GAME_CAMERA_CENTERED_LOOK_AHEAD);
 
   if (snap || lookBackChanged) {
     gameCameraState.position.copy(desiredPosition);
@@ -646,9 +611,6 @@ function updateGameCamera(deltaTime, snap = false) {
     const targetBlend = 1 - Math.exp(-GAME_CAMERA_TARGET_DAMPING * deltaTime);
     if (isGameLookBackActive) {
       const positionBlend = 1 - Math.exp(-GAME_CAMERA_POSITION_DAMPING * deltaTime);
-      gameCameraState.position.lerp(desiredPosition, positionBlend);
-    } else if (gameCameraState.position.distanceTo(desiredPosition) > GAME_CAMERA_POSITION_POP_THRESHOLD) {
-      const positionBlend = 1 - Math.exp(-GAME_CAMERA_POSITION_POP_DAMPING * deltaTime);
       gameCameraState.position.lerp(desiredPosition, positionBlend);
     } else {
       gameCameraState.position.copy(desiredPosition);

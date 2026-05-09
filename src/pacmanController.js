@@ -7,6 +7,8 @@ const CENTER_EPSILON = 0.001;
 const BODY_TURN_RESPONSIVENESS = 7.5;
 const MID_CORNER_REVERSE_BODY_TURN_RESPONSIVENESS = 9.25;
 const CORNER_BEND_RADIUS = 2.55 * 1.4;
+const CAMERA_TRAIL_MAX_POINTS = 260;
+const CAMERA_TRAIL_MIN_SPACING = 0.05;
 
 function getTileCenter(tile) {
   return new THREE.Vector3(tile.position.x, ENTITY_HEIGHT, tile.position.z);
@@ -116,6 +118,10 @@ function getRoutePosition(route) {
   const segmentProgress = (route.progress - startDistance) / (endDistance - startDistance);
 
   return route.points[endIndex - 1].clone().lerp(route.points[endIndex], segmentProgress);
+}
+
+function getRoutePositionAt(route, progress) {
+  return getRoutePosition({ ...route, progress });
 }
 
 function createEdge(fromNode, toNode, inputDirection, endDirection, points, options = {}) {
@@ -236,6 +242,7 @@ export class PacmanController {
     this.route = null;
     this.forceContinueDirection = null;
     this.isMoving = false;
+    this.cameraTrail = [];
   }
 
   reset(spawnTile, direction = null) {
@@ -251,6 +258,7 @@ export class PacmanController {
     this.route = null;
     this.forceContinueDirection = null;
     this.isMoving = false;
+    this.cameraTrail = [this.currentNode.position.clone()];
 
     this.model.position.copy(this.currentNode.position);
     this.model.rotation.set(0, DIRECTION_YAW[this.bodyFacingDirection], 0);
@@ -309,15 +317,19 @@ export class PacmanController {
     let remainingDistance = this.speed * deltaTime;
 
     while (remainingDistance > CENTER_EPSILON && this.route) {
+      const route = this.route;
+      const previousProgress = route.progress;
       const distanceLeft = this.route.totalLength - this.route.progress;
 
       if (remainingDistance >= distanceLeft) {
         this.route.progress = this.route.totalLength;
+        this.recordCameraTrail(route, previousProgress, route.totalLength);
         this.model.position.copy(getRoutePosition(this.route));
         remainingDistance -= distanceLeft;
         this.finishActiveEdge();
       } else {
         this.route.progress += remainingDistance;
+        this.recordCameraTrail(route, previousProgress, route.progress);
         this.model.position.copy(getRoutePosition(this.route));
         remainingDistance = 0;
       }
@@ -475,5 +487,77 @@ export class PacmanController {
 
   getCameraTarget() {
     return this.model.position.clone();
+  }
+
+  getRouteCameraPoint(offsetFromPacman = 0, clampToRoute = true) {
+    if (!this.route) {
+      return this.getCameraTarget().addScaledVector(
+        getDirectionVector(this.getFacingDirection()),
+        offsetFromPacman
+      );
+    }
+
+    const rawProgress = this.route.progress + offsetFromPacman;
+    if (!clampToRoute && (rawProgress < 0 || rawProgress > this.route.totalLength)) {
+      return null;
+    }
+
+    const progress = THREE.MathUtils.clamp(rawProgress, 0, this.route.totalLength);
+
+    return getRoutePositionAt(this.route, progress);
+  }
+
+  recordCameraTrail(route, fromProgress, toProgress) {
+    if (!route || fromProgress === toProgress) return;
+
+    const direction = toProgress > fromProgress ? 1 : -1;
+    let progress = fromProgress + direction * CAMERA_TRAIL_MIN_SPACING;
+
+    while (
+      (direction > 0 && progress < toProgress)
+      || (direction < 0 && progress > toProgress)
+    ) {
+      this.appendCameraTrailPoint(getRoutePositionAt(route, progress));
+      progress += direction * CAMERA_TRAIL_MIN_SPACING;
+    }
+
+    this.appendCameraTrailPoint(getRoutePositionAt(route, toProgress));
+  }
+
+  appendCameraTrailPoint(point) {
+    const previous = this.cameraTrail[this.cameraTrail.length - 1];
+
+    if (!previous || previous.distanceTo(point) >= CAMERA_TRAIL_MIN_SPACING) {
+      this.cameraTrail.push(point.clone());
+    } else {
+      previous.copy(point);
+    }
+
+    while (this.cameraTrail.length > CAMERA_TRAIL_MAX_POINTS) {
+      this.cameraTrail.shift();
+    }
+  }
+
+  getCameraTrailPoint(distanceBehind, fallbackForward) {
+    const latest = this.cameraTrail[this.cameraTrail.length - 1];
+    if (!latest) return this.getCameraTarget();
+
+    let remainingDistance = distanceBehind;
+
+    for (let index = this.cameraTrail.length - 1; index > 0; index -= 1) {
+      const current = this.cameraTrail[index];
+      const previous = this.cameraTrail[index - 1];
+      const segmentLength = current.distanceTo(previous);
+
+      if (segmentLength >= remainingDistance) {
+        const t = remainingDistance / segmentLength;
+        return current.clone().lerp(previous, t);
+      }
+
+      remainingDistance -= segmentLength;
+    }
+
+    const fallbackDirection = fallbackForward?.clone?.() || getDirectionVector(this.getFacingDirection());
+    return latest.clone().addScaledVector(fallbackDirection.normalize(), -distanceBehind);
   }
 }
