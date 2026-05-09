@@ -10,6 +10,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildShowcase, showcaseLayout, createMazePiece, createPedestal, TILE_SIZE, PIECE_CONNECTORS } from './mazePieces.js';
 import { createPacman, createGhost, createPellet, createStandardPellet } from './entities.js';
+import { buildMazeGraph, EXPERIMENTAL_GAME_MAP } from './mazeGraph.js';
+import { PacmanController } from './pacmanController.js';
 import './style.css';
 
 const scene = new THREE.Scene();
@@ -17,6 +19,8 @@ scene.background = new THREE.Color(0x010204);
 scene.fog = new THREE.FogExp2(0x010204, 0.009);
 
 const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 500);
+const DEFAULT_CAMERA_FOV = 48;
+const GAME_CAMERA_FOV = 50;
 
 // --- Camera Profiles ---
 const GALLERY_VIEW = {
@@ -56,6 +60,15 @@ const uiHtml = `
     
     <div class="deck-body">
       <button class="btn btn-primary" id="btn-toggle-mode">Open Editor</button>
+      <button class="btn" id="btn-toggle-game">Start Game</button>
+
+      <div class="game-only-controls" id="game-only-controls" style="display: none; flex-direction: column; gap: 14px;">
+        <div class="hotkey-list">
+          <div class="hotkey-item"><span>Move</span> <span class="hotkey-key">WASD / Arrows</span></div>
+          <div class="hotkey-item"><span>Look Back</span> <span class="hotkey-key">Hold Space</span></div>
+          <div class="hotkey-item"><span>Exit</span> <span class="hotkey-key">Esc</span></div>
+        </div>
+      </div>
       
       <div class="editor-only-controls" id="editor-only-controls" style="display: none; flex-direction: column; gap: 20px;">
         <div style="display: flex; gap: 10px;">
@@ -207,6 +220,91 @@ function createGroundGlow(radius, color, opacity) {
 
 const showcase = buildShowcase(showcaseLayout);
 const editorMaze = new THREE.Group();
+const gameMaze = new THREE.Group();
+const gameGraph = buildMazeGraph(EXPERIMENTAL_GAME_MAP);
+let gamePacman = null;
+let gameController = null;
+let isGameMode = false;
+let isGameLookBackActive = false;
+let previousGameLookBackState = false;
+const gameCameraState = {
+  forward: new THREE.Vector3(1, 0, 0),
+  target: new THREE.Vector3(),
+  position: new THREE.Vector3()
+};
+const GAME_CAMERA_DIRECTION_DAMPING = 7.5;
+const GAME_CAMERA_POSITION_DAMPING = 7.0;
+const GAME_CAMERA_TARGET_DAMPING = 8.5;
+const GAME_CAMERA_TURN_SPEED = 8.5;
+const GAME_CAMERA_REVERSE_TURN_SPEED = 11.5;
+const GAME_CAMERA_DISTANCE = 5.75;
+const GAME_CAMERA_HEIGHT = -0.85;
+const GAME_CAMERA_LOOK_AHEAD = 4.25;
+const GAME_CAMERA_TARGET_HEIGHT = 0.35;
+const GAME_CAMERA_TRAIL_MAX_POINTS = 220;
+const GAME_CAMERA_TRAIL_MIN_SPACING = 0.2;
+const GAME_CAMERA_POSITION_POP_THRESHOLD = 0.55;
+const GAME_CAMERA_POSITION_POP_DAMPING = 18;
+
+const gameCameraTrail = [];
+
+function rotateFlatVectorToward(current, desired, maxRadians) {
+  const from = current.clone().setY(0).normalize();
+  const to = desired.clone().setY(0).normalize();
+  const dot = THREE.MathUtils.clamp(from.dot(to), -1, 1);
+  const crossY = from.x * to.z - from.z * to.x;
+  const angle = Math.atan2(-crossY, dot);
+  const step = THREE.MathUtils.clamp(angle, -maxRadians, maxRadians);
+
+  return from.applyAxisAngle(new THREE.Vector3(0, 1, 0), step).normalize();
+}
+
+function resetGameCameraTrail() {
+  gameCameraTrail.length = 0;
+
+  if (gameController) {
+    gameCameraTrail.push(gameController.getCameraTarget());
+  }
+}
+
+function updateGameCameraTrail() {
+  if (!gameController) return;
+
+  const position = gameController.getCameraTarget();
+  const previous = gameCameraTrail[gameCameraTrail.length - 1];
+
+  if (!previous || previous.distanceTo(position) >= GAME_CAMERA_TRAIL_MIN_SPACING) {
+    gameCameraTrail.push(position);
+  } else {
+    previous.copy(position);
+  }
+
+  while (gameCameraTrail.length > GAME_CAMERA_TRAIL_MAX_POINTS) {
+    gameCameraTrail.shift();
+  }
+}
+
+function sampleGameCameraTrail(distanceBehind, fallbackForward) {
+  const latest = gameCameraTrail[gameCameraTrail.length - 1];
+  if (!latest) return gameController.getCameraTarget();
+
+  let remainingDistance = distanceBehind;
+
+  for (let index = gameCameraTrail.length - 1; index > 0; index -= 1) {
+    const current = gameCameraTrail[index];
+    const previous = gameCameraTrail[index - 1];
+    const segmentLength = current.distanceTo(previous);
+
+    if (segmentLength >= remainingDistance) {
+      const t = remainingDistance / segmentLength;
+      return current.clone().lerp(previous, t);
+    }
+
+    remainingDistance -= segmentLength;
+  }
+
+  return latest.clone().addScaledVector(fallbackForward, -distanceBehind);
+}
 
 // Move floor meshes into showcase group
 showcase.add(floor);
@@ -223,6 +321,29 @@ scene.add(raycastPlane);
 
 scene.add(showcase);
 scene.add(editorMaze);
+scene.add(gameMaze);
+gameMaze.visible = false;
+
+function buildGameMaze() {
+  gameMaze.clear();
+
+  EXPERIMENTAL_GAME_MAP.forEach((item) => {
+    const piece = createMazePiece(item.type);
+    piece.position.set(...item.position);
+    piece.rotation.y = item.rotation;
+    piece.userData = { type: item.type, rotation: item.rotation };
+    gameMaze.add(piece);
+  });
+
+  gamePacman = createPacman();
+  gamePacman.scale.setScalar(0.32);
+  gameMaze.add(gamePacman);
+
+  gameController = new PacmanController(gamePacman, gameGraph);
+  gameController.reset(gameGraph.getTileAt(0, 0));
+}
+
+buildGameMaze();
 
 // --- Hero Wing (Characters) ---
 // Pushed further back for monumental separation (Row 5 equivalent)
@@ -347,6 +468,10 @@ scene.add(gridHelper);
 
 // --- Mode Management ---
 function toggleMode() {
+  if (isGameMode) {
+    exitGameMode();
+  }
+
   isEditorMode = !isEditorMode;
   
   const statusTab = document.querySelector('#mode-status');
@@ -389,6 +514,153 @@ function toggleMode() {
   }
 }
 
+function enterGameMode() {
+  if (isEditorMode) {
+    toggleMode();
+  }
+
+  isGameMode = true;
+  isGameLookBackActive = false;
+  previousGameLookBackState = false;
+  appContainer.classList.add('game-active');
+
+  const statusTab = document.querySelector('#mode-status');
+  const gameBtn = document.querySelector('#btn-toggle-game');
+  const editorBtn = document.querySelector('#btn-toggle-mode');
+  const gameControls = document.querySelector('#game-only-controls');
+
+  statusTab.textContent = 'Game';
+  gameBtn.textContent = 'End Game';
+  editorBtn.style.display = 'none';
+  gameControls.style.display = 'flex';
+
+  showcase.visible = false;
+  editorMaze.visible = false;
+  gameMaze.visible = true;
+  gridHelper.visible = false;
+  removeGhostPiece();
+
+  scene.fog.density = 0.004;
+  ambient.intensity = 2.2;
+  camera.fov = GAME_CAMERA_FOV;
+  camera.updateProjectionMatrix();
+
+  controls.enabled = false;
+  controls.enableRotate = false;
+
+  gameController.reset(gameGraph.getTileAt(0, 0));
+  resetGameCameraTrail();
+  gameCameraState.forward.copy(gameController.getFollowDirection());
+  gameCameraState.target.copy(gameController.getCameraTarget());
+  gameCameraState.position.copy(camera.position);
+  updateGameCamera(1, true);
+}
+
+function exitGameMode() {
+  isGameMode = false;
+  isGameLookBackActive = false;
+  previousGameLookBackState = false;
+  appContainer.classList.remove('game-active');
+
+  const statusTab = document.querySelector('#mode-status');
+  const gameBtn = document.querySelector('#btn-toggle-game');
+  const editorBtn = document.querySelector('#btn-toggle-mode');
+  const gameControls = document.querySelector('#game-only-controls');
+
+  statusTab.textContent = 'Showcase';
+  gameBtn.textContent = 'Start Game';
+  editorBtn.style.display = '';
+  gameControls.style.display = 'none';
+
+  showcase.visible = true;
+  editorMaze.visible = false;
+  gameMaze.visible = false;
+
+  scene.fog.density = 0.009;
+  ambient.intensity = 1.4;
+  camera.fov = DEFAULT_CAMERA_FOV;
+  camera.updateProjectionMatrix();
+
+  controls.enabled = true;
+  controls.enableRotate = true;
+  controls.maxPolarAngle = Math.PI / 2.12;
+  controls.minDistance = 18;
+  camera.position.set(...GALLERY_VIEW.pos);
+  controls.target.set(...GALLERY_VIEW.target);
+}
+
+function toggleGameMode() {
+  if (isGameMode) {
+    exitGameMode();
+  } else {
+    enterGameMode();
+  }
+}
+
+function getGameInputIntent(key) {
+  if (key === 'arrowup' || key === 'w') return 'forward';
+  if (key === 'arrowright' || key === 'd') return 'right';
+  if (key === 'arrowdown' || key === 's') return 'reverse';
+  if (key === 'arrowleft' || key === 'a') return 'left';
+
+  return null;
+}
+
+function updateGameCamera(deltaTime, snap = false) {
+  if (!gameController) return;
+
+  const target = gameController.getCameraTarget();
+  updateGameCameraTrail();
+
+  const desiredForward = gameController.getFollowDirection()
+    .multiplyScalar(isGameLookBackActive ? -1 : 1);
+  const lookBackChanged = isGameLookBackActive !== previousGameLookBackState;
+
+  if (snap || lookBackChanged) {
+    gameCameraState.forward.copy(desiredForward).normalize();
+  } else {
+    const dot = THREE.MathUtils.clamp(gameCameraState.forward.dot(desiredForward), -1, 1);
+    const isReversal = dot < -0.45;
+    const maxTurn = (isReversal ? GAME_CAMERA_REVERSE_TURN_SPEED : GAME_CAMERA_TURN_SPEED) * deltaTime;
+    const rotatedForward = rotateFlatVectorToward(gameCameraState.forward, desiredForward, maxTurn);
+    const directionBlend = 1 - Math.exp(-GAME_CAMERA_DIRECTION_DAMPING * deltaTime);
+    gameCameraState.forward.copy(rotatedForward.lerp(desiredForward, directionBlend * 0.2).normalize());
+  }
+
+  previousGameLookBackState = isGameLookBackActive;
+
+  const desiredPosition = isGameLookBackActive
+    ? target.clone()
+      .addScaledVector(gameCameraState.forward, -GAME_CAMERA_DISTANCE)
+      .add(new THREE.Vector3(0, GAME_CAMERA_HEIGHT, 0))
+    : sampleGameCameraTrail(GAME_CAMERA_DISTANCE, gameCameraState.forward)
+      .add(new THREE.Vector3(0, GAME_CAMERA_HEIGHT, 0));
+  const desiredTarget = target.clone()
+    .add(gameCameraState.forward.clone().multiplyScalar(GAME_CAMERA_LOOK_AHEAD))
+    .add(new THREE.Vector3(0, GAME_CAMERA_TARGET_HEIGHT, 0));
+
+  if (snap || lookBackChanged) {
+    gameCameraState.position.copy(desiredPosition);
+    gameCameraState.target.copy(desiredTarget);
+  } else {
+    const targetBlend = 1 - Math.exp(-GAME_CAMERA_TARGET_DAMPING * deltaTime);
+    if (isGameLookBackActive) {
+      const positionBlend = 1 - Math.exp(-GAME_CAMERA_POSITION_DAMPING * deltaTime);
+      gameCameraState.position.lerp(desiredPosition, positionBlend);
+    } else if (gameCameraState.position.distanceTo(desiredPosition) > GAME_CAMERA_POSITION_POP_THRESHOLD) {
+      const positionBlend = 1 - Math.exp(-GAME_CAMERA_POSITION_POP_DAMPING * deltaTime);
+      gameCameraState.position.lerp(desiredPosition, positionBlend);
+    } else {
+      gameCameraState.position.copy(desiredPosition);
+    }
+    gameCameraState.target.lerp(desiredTarget, targetBlend);
+  }
+
+  camera.position.copy(gameCameraState.position);
+  controls.target.copy(gameCameraState.target);
+  camera.lookAt(controls.target);
+}
+
 function toggleCamera(type) {
   isBirdseye = (type === '2d');
   const slider = document.querySelector('#view-slider');
@@ -426,6 +698,7 @@ zoomSlider.addEventListener('input', (e) => {
 });
 
 document.querySelector('#btn-toggle-mode').addEventListener('click', toggleMode);
+document.querySelector('#btn-toggle-game').addEventListener('click', toggleGameMode);
 
 document.querySelectorAll('.toggle-option').forEach(opt => {
   opt.addEventListener('click', () => toggleCamera(opt.dataset.view));
@@ -600,6 +873,27 @@ window.addEventListener('keydown', (e) => {
     window.getCameraConfig();
   }
 
+  if (isGameMode) {
+    if (key === ' ') {
+      e.preventDefault();
+      isGameLookBackActive = true;
+      return;
+    }
+
+    const gameIntent = getGameInputIntent(key);
+
+    if (gameIntent) {
+      e.preventDefault();
+      gameController.setDesiredIntent(gameIntent);
+    }
+
+    if (key === 'escape') {
+      exitGameMode();
+    }
+
+    return;
+  }
+
   if (!isEditorMode) return;
 
   if (key === 'tab') {
@@ -685,6 +979,14 @@ window.addEventListener('keydown', (e) => {
   if (key === 'arrowright' || key === 'd') {
     controls.target.x += panSpeed;
     camera.position.x += panSpeed;
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  if (!isGameMode) return;
+
+  if (e.key === ' ') {
+    isGameLookBackActive = false;
   }
 });
 
@@ -975,7 +1277,8 @@ function updatePulseMeshes(elapsedTime) {
 }
 
 function animate() {
-  const elapsedTime = clock.getElapsedTime();
+  const deltaTime = Math.min(clock.getDelta(), 0.05);
+  const elapsedTime = clock.elapsedTime;
 
   updatePulseMeshes(elapsedTime);
   
@@ -1003,6 +1306,11 @@ function animate() {
   }
   if (stdPellet && stdPellet.userData.update) {
     stdPellet.userData.update(elapsedTime);
+  }
+
+  if (isGameMode && gameController) {
+    gameController.update(deltaTime, elapsedTime);
+    updateGameCamera(deltaTime);
   }
 
   if (isEditorMode) {
