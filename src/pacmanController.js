@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { TILE_SIZE } from './mazePieces.js';
 import { DIRECTION_YAW, DIRECTIONS, LEFT_DIRECTIONS, OPPOSITE_DIRECTIONS, RIGHT_DIRECTIONS, getAbsoluteDirections, getDirectionVector } from './mazeGraph.js';
 
-const ENTITY_HEIGHT = 3.2;
+const ENTITY_HEIGHT = 2.0;
 const CENTER_EPSILON = 0.001;
 const BODY_TURN_RESPONSIVENESS = 7.5;
 const MID_CORNER_REVERSE_BODY_TURN_RESPONSIVENESS = 9.25;
@@ -502,6 +502,7 @@ export class PacmanController {
       return null;
     }
 
+    // Clamp the progress to the valid range to avoid returning undefined/NaN points
     const progress = THREE.MathUtils.clamp(rawProgress, 0, this.route.totalLength);
 
     return getRoutePositionAt(this.route, progress);
@@ -527,10 +528,8 @@ export class PacmanController {
   appendCameraTrailPoint(point) {
     const previous = this.cameraTrail[this.cameraTrail.length - 1];
 
-    if (!previous || previous.distanceTo(point) >= CAMERA_TRAIL_MIN_SPACING) {
+    if (!previous || previous.distanceTo(point) >= CAMERA_TRAIL_MIN_SPACING * 0.5) {
       this.cameraTrail.push(point.clone());
-    } else {
-      previous.copy(point);
     }
 
     while (this.cameraTrail.length > CAMERA_TRAIL_MAX_POINTS) {
@@ -539,15 +538,14 @@ export class PacmanController {
   }
 
   getCameraTrailPoint(distanceBehind, fallbackForward) {
-    const latest = this.cameraTrail[this.cameraTrail.length - 1];
-    if (!latest) return this.getCameraTarget();
-
     let remainingDistance = distanceBehind;
+    let current = this.getCameraTarget();
 
-    for (let index = this.cameraTrail.length - 1; index > 0; index -= 1) {
-      const current = this.cameraTrail[index];
-      const previous = this.cameraTrail[index - 1];
+    for (let index = this.cameraTrail.length - 1; index >= 0; index -= 1) {
+      const previous = this.cameraTrail[index];
       const segmentLength = current.distanceTo(previous);
+
+      if (segmentLength === 0) continue;
 
       if (segmentLength >= remainingDistance) {
         const t = remainingDistance / segmentLength;
@@ -555,9 +553,10 @@ export class PacmanController {
       }
 
       remainingDistance -= segmentLength;
+      current = previous;
     }
 
     const fallbackDirection = fallbackForward?.clone?.() || getDirectionVector(this.getFacingDirection());
-    return latest.clone().addScaledVector(fallbackDirection.normalize(), -distanceBehind);
+    return current.clone().addScaledVector(fallbackDirection.normalize(), -remainingDistance);
   }
 }
