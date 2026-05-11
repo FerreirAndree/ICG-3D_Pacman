@@ -229,10 +229,12 @@ let isGameLookBackActive = false;
 let previousGameLookBackState = false;
 const gameCameraState = {
   forward: new THREE.Vector3(1, 0, 0),
+  reverseHoldForward: new THREE.Vector3(1, 0, 0),
   target: new THREE.Vector3(),
   position: new THREE.Vector3(),
   isReversing: false,
-  reversalTimer: 0
+  reversalTimer: 0,
+  reverseSnapFramesRemaining: 0
 };
 const GAME_CAMERA_DIRECTION_DAMPING = 7.5;
 const GAME_CAMERA_POSITION_DAMPING = 7.0;
@@ -268,6 +270,7 @@ function getGameCameraRailPoint(distanceBehind, fallbackForward, lookBack = fals
   }
   return gameController.getCameraTrailPoint(distanceBehind, fallbackForward);
 }
+
 
 // Move floor meshes into showcase group
 showcase.add(floor);
@@ -513,10 +516,12 @@ function enterGameMode() {
 
   gameController.reset(gameGraph.getTileAt(0, 0));
   gameCameraState.forward.copy(gameController.getFollowDirection());
+  gameCameraState.reverseHoldForward.copy(gameCameraState.forward);
   gameCameraState.target.copy(gameController.getCameraTarget());
   gameCameraState.position.copy(camera.position);
   gameCameraState.isReversing = false;
   gameCameraState.reversalTimer = 0;
+  gameCameraState.reverseSnapFramesRemaining = 0;
   updateGameCamera(1, true);
 }
 
@@ -570,6 +575,14 @@ function getGameInputIntent(key) {
   return null;
 }
 
+function beginGameCameraReverseDelay() {
+  if (isGameLookBackActive || gameCameraState.isReversing) return;
+
+  gameCameraState.isReversing = true;
+  gameCameraState.reverseHoldForward.copy(gameCameraState.forward);
+  gameCameraState.reversalTimer = 0.35;
+}
+
 function updateGameCamera(deltaTime, snap = false) {
   if (!gameController) return;
 
@@ -589,27 +602,27 @@ function updateGameCamera(deltaTime, snap = false) {
   } else {
     // Determine dot product against actual desired forward
     const dot = THREE.MathUtils.clamp(gameCameraState.forward.dot(desiredForward), -1, 1);
-    const isReversal = dot < -0.45;
+
+    if (gameCameraState.isReversing && dot > 0.45) {
+      // User reversed twice quickly, abort the reversal delay
+      gameCameraState.isReversing = false;
+      gameCameraState.reversalTimer = 0;
+      // When aborting, we must ensure we snap back to standard tracking immediately
+      // rather than carrying any corrupted delayed state forward.
+      forceSnapThisFrame = true;
+      gameCameraState.forward.copy(desiredForward).normalize();
+    }
 
     if (gameCameraState.isReversing) {
       gameCameraState.reversalTimer -= deltaTime;
-      if (gameCameraState.reversalTimer <= 0) {
-        // Time's up: snap to correct behind view
+      // Abort the delay instantly if the timer expires OR if Pacman hits a wall and stops
+      if (gameCameraState.reversalTimer <= 0 || !gameController.isMoving) {
+        // Time's up or we hit a wall: snap to correct behind view
         gameCameraState.isReversing = false;
         gameCameraState.forward.copy(desiredForward).normalize();
         forceSnapThisFrame = true; // Snap position/target
       } else {
         // Keep old forward direction
-        isCameraInReverseState = true;
-      }
-    } else if (isReversal) {
-      if (isGameLookBackActive) {
-        // If we are already looking back, just snap instantly to avoid swinging through the pipe
-        forceSnapThisFrame = true;
-        gameCameraState.forward.copy(desiredForward).normalize();
-      } else {
-        gameCameraState.isReversing = true;
-        gameCameraState.reversalTimer = 0.35; // 0.35s delay for the turn animation
         isCameraInReverseState = true;
       }
     } else {
@@ -625,11 +638,15 @@ function updateGameCamera(deltaTime, snap = false) {
   // If we are looking back OR we are in the middle of a reversal delay, we want the camera IN FRONT of Pacman
   const effectivelyLookingBack = isGameLookBackActive || isCameraInReverseState;
 
-  const desiredPosition = effectivelyLookingBack
-    ? getGameCameraRailPoint(GAME_CAMERA_DISTANCE, gameCameraState.forward, true)
+  const desiredPosition = isCameraInReverseState
+    ? target.clone()
+      .addScaledVector(gameCameraState.reverseHoldForward, -GAME_CAMERA_DISTANCE)
       .add(new THREE.Vector3(0, GAME_CAMERA_HEIGHT, 0))
-    : getGameCameraRailPoint(GAME_CAMERA_DISTANCE, gameCameraState.forward, false)
-      .add(new THREE.Vector3(0, GAME_CAMERA_HEIGHT, 0));
+    : effectivelyLookingBack
+      ? getGameCameraRailPoint(GAME_CAMERA_DISTANCE, gameCameraState.forward, true)
+        .add(new THREE.Vector3(0, GAME_CAMERA_HEIGHT, 0))
+      : getGameCameraRailPoint(GAME_CAMERA_DISTANCE, gameCameraState.forward, false)
+        .add(new THREE.Vector3(0, GAME_CAMERA_HEIGHT, 0));
 
   const anchoredTarget = target.clone().add(new THREE.Vector3(0, GAME_CAMERA_TARGET_HEIGHT, 0));
   const centeredForward = anchoredTarget.clone().sub(desiredPosition).setY(0);
@@ -647,19 +664,28 @@ function updateGameCamera(deltaTime, snap = false) {
     gameCameraState.position.copy(desiredPosition);
     gameCameraState.target.copy(desiredTarget);
   } else {
-    const targetBlend = 1 - Math.exp(-GAME_CAMERA_TARGET_DAMPING * deltaTime);
-    if (effectivelyLookingBack) {
-      const positionBlend = 1 - Math.exp(-GAME_CAMERA_POSITION_DAMPING * deltaTime);
-      gameCameraState.position.lerp(desiredPosition, positionBlend);
-    } else {
+    if (isCameraInReverseState) {
       gameCameraState.position.copy(desiredPosition);
+      gameCameraState.target.copy(desiredTarget);
+    } else if (effectivelyLookingBack) {
+      const positionBlend = 1 - Math.exp(-GAME_CAMERA_POSITION_DAMPING * deltaTime);
+      const targetBlend = 1 - Math.exp(-GAME_CAMERA_TARGET_DAMPING * deltaTime);
+      gameCameraState.position.lerp(desiredPosition, positionBlend);
+      gameCameraState.target.lerp(desiredTarget, targetBlend);
+    } else {
+      // Rigid tracking prevents the camera from "settling" or pitching upward when velocity stops
+      gameCameraState.position.copy(desiredPosition);
+      gameCameraState.target.copy(desiredTarget);
     }
-    gameCameraState.target.lerp(desiredTarget, targetBlend);
   }
 
   camera.position.copy(gameCameraState.position);
   controls.target.copy(gameCameraState.target);
   camera.lookAt(controls.target);
+
+  if (gameCameraState.reverseSnapFramesRemaining > 0) {
+    gameCameraState.reverseSnapFramesRemaining -= 1;
+  }
 }
 
 function toggleCamera(type) {
@@ -885,7 +911,12 @@ window.addEventListener('keydown', (e) => {
 
     if (gameIntent) {
       e.preventDefault();
-      gameController.setDesiredIntent(gameIntent);
+      if (gameIntent === 'reverse' && e.repeat) return;
+
+      const inputResult = gameController.setDesiredIntent(gameIntent);
+      if (inputResult?.started && inputResult.reverseIntent) {
+        beginGameCameraReverseDelay();
+      }
     }
 
     if (key === 'escape') {
@@ -1311,7 +1342,20 @@ function animate() {
 
   if (isGameMode && gameController) {
     gameController.update(deltaTime, elapsedTime);
-    updateGameCamera(deltaTime);
+    let forceSnap = false;
+    let startedIntent = gameController.consumeStartedIntent();
+    while (startedIntent) {
+      if (startedIntent === 'reverse') {
+        beginGameCameraReverseDelay();
+      } else if (startedIntent === 'reverse_instant') {
+        gameCameraState.isReversing = false;
+        gameCameraState.reversalTimer = 0;
+        gameCameraState.forward.copy(gameController.getFollowDirection()).normalize();
+        forceSnap = true;
+      }
+      startedIntent = gameController.consumeStartedIntent();
+    }
+    updateGameCamera(deltaTime, forceSnap);
   }
 
   if (isEditorMode) {

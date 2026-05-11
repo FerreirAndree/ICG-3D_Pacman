@@ -243,6 +243,7 @@ export class PacmanController {
     this.forceContinueDirection = null;
     this.isMoving = false;
     this.cameraTrail = [];
+    this.startedIntentEvents = [];
   }
 
   reset(spawnTile, direction = null) {
@@ -259,6 +260,7 @@ export class PacmanController {
     this.forceContinueDirection = null;
     this.isMoving = false;
     this.cameraTrail = [this.currentNode.position.clone()];
+    this.startedIntentEvents = [];
 
     this.model.position.copy(this.currentNode.position);
     this.model.rotation.set(0, DIRECTION_YAW[this.bodyFacingDirection], 0);
@@ -286,25 +288,28 @@ export class PacmanController {
 
   setDesiredIntent(intent) {
     const direction = this.resolveIntentDirection(intent);
-    if (!direction) return;
+    if (!direction) return { accepted: false, direction: null, reverseIntent: false };
+
+    const reverseIntent = intent === 'reverse';
 
     if (this.canReverseImmediately(direction)) {
       this.reverseActiveEdge();
-      return;
+      return { accepted: true, direction, reverseIntent, started: true };
     }
 
     if (!this.isMoving) {
       const edge = this.findEdge(direction);
-      if (!edge) return;
+      if (!edge) return { accepted: false, direction, reverseIntent };
 
       this.desiredIntent = null;
       this.desiredDirection = null;
-      this.startEdge(edge);
-      return;
+      this.startEdge(edge, null, intent);
+      return { accepted: true, direction, reverseIntent, started: true };
     }
 
     this.desiredIntent = intent;
     this.desiredDirection = null;
+    return { accepted: true, direction, reverseIntent, queued: true };
   }
 
   update(deltaTime, elapsedTime) {
@@ -343,7 +348,9 @@ export class PacmanController {
     return this.currentNode?.edges.find((edge) => edge.inputDirection === direction) || null;
   }
 
-  startEdge(edge, forceContinueDirection = null) {
+  startEdge(edge, forceContinueDirection = null, startedFromIntent = null) {
+    const isUTurn = this.currentDirection && edge.inputDirection === OPPOSITE_DIRECTIONS[this.currentDirection];
+
     this.activeEdge = edge;
     this.route = buildRoute(edge.points);
     this.forceContinueDirection = forceContinueDirection ?? edge.continueDirection;
@@ -351,6 +358,17 @@ export class PacmanController {
     this.facingDirection = edge.endDirection;
     this.bodyFacingDirection = edge.endDirection;
     this.isMoving = true;
+
+    if (isUTurn || startedFromIntent === 'reverse') {
+      this.rebuildCameraTrailBehind();
+      
+      const isCornerBend = edge.from.type === 'corner' && edge.to.type === 'corner' && edge.from.tile === edge.to.tile;
+      const intentToEmit = isCornerBend ? 'reverse_instant' : 'reverse';
+      
+      this.startedIntentEvents.push(intentToEmit);
+    } else if (startedFromIntent) {
+      this.startedIntentEvents.push(startedFromIntent);
+    }
   }
 
   finishActiveEdge() {
@@ -374,11 +392,12 @@ export class PacmanController {
       return;
     }
 
+    const desiredIntent = this.desiredIntent;
     const desiredEdge = this.findDesiredEdge();
     if (desiredEdge) {
       this.desiredDirection = null;
       this.desiredIntent = null;
-      this.startEdge(desiredEdge);
+      this.startEdge(desiredEdge, null, desiredIntent);
       return;
     }
 
@@ -416,7 +435,7 @@ export class PacmanController {
   reverseActiveEdge() {
     const oldEdge = this.activeEdge;
     const oldRoute = this.route;
-    const isReversingCornerBend = oldEdge.from.type === 'corner' && oldEdge.to.type === 'corner';
+    const isReversingCornerBend = oldEdge.from.type === 'corner' && oldEdge.to.type === 'corner' && oldEdge.from.tile === oldEdge.to.tile;
     const reversedPoints = oldEdge.points.slice().reverse().map((point) => point.clone());
     const reversedEdge = {
       from: oldEdge.to,
@@ -446,6 +465,12 @@ export class PacmanController {
     this.desiredIntent = null;
     this.model.position.copy(getRoutePosition(this.route));
     this.isMoving = true;
+    this.rebuildCameraTrailBehind();
+    this.startedIntentEvents.push(isReversingCornerBend ? 'reverse_instant' : 'reverse');
+  }
+
+  consumeStartedIntent() {
+    return this.startedIntentEvents.shift() || null;
   }
 
   findDesiredEdge() {
@@ -525,7 +550,47 @@ export class PacmanController {
     this.appendCameraTrailPoint(getRoutePositionAt(route, toProgress));
   }
 
+  rebuildCameraTrailBehind() {
+    this.cameraTrail = [];
+    
+    if (this.activeEdge) {
+      const isCornerTurn = this.activeEdge.from.connector && this.activeEdge.from.connector !== this.activeEdge.inputDirection;
+      const behindDir = isCornerTurn ? this.activeEdge.from.connector : OPPOSITE_DIRECTIONS[this.activeEdge.inputDirection];
+      
+      if (behindDir) {
+        const farBehindPoint = this.activeEdge.points[0].clone().addScaledVector(getDirectionVector(behindDir), 20);
+        this.cameraTrail.push(farBehindPoint);
+      }
+    }
+
+    if (this.route) {
+      for (let p = 0; p <= this.route.progress; p += CAMERA_TRAIL_MIN_SPACING) {
+        this.cameraTrail.push(getRoutePositionAt(this.route, p));
+      }
+      const lastPoint = getRoutePositionAt(this.route, this.route.progress);
+      if (this.cameraTrail.length === 0 || this.cameraTrail[this.cameraTrail.length - 1].distanceTo(lastPoint) > 0.001) {
+        this.cameraTrail.push(lastPoint);
+      }
+    } else if (this.currentNode) {
+      this.cameraTrail.push(this.currentNode.position.clone());
+    } else {
+      this.cameraTrail.push(this.model.position.clone());
+    }
+  }
+
   appendCameraTrailPoint(point) {
+    // Prevent trail zig-zags by eating breadcrumbs if we retrace our steps backwards
+    if (this.cameraTrail.length >= 2) {
+      const prev = this.cameraTrail[this.cameraTrail.length - 1];
+      const prev2 = this.cameraTrail[this.cameraTrail.length - 2];
+      
+      // If we are closer to prev2 than prev was, we are moving backwards along the trail!
+      if (point.distanceTo(prev2) < prev.distanceTo(prev2)) {
+        this.cameraTrail.pop();
+        // Do not return here! Let the logic below evaluate if we should add the new point
+      }
+    }
+
     const previous = this.cameraTrail[this.cameraTrail.length - 1];
 
     if (!previous || previous.distanceTo(point) >= CAMERA_TRAIL_MIN_SPACING * 0.5) {
