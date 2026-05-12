@@ -65,13 +65,16 @@ function getCornerBendEntrancePoint(tile, connector) {
 }
 
 function getNodeId(tile, connector = null) {
+  if (tile.type === 'ghostchamber') {
+    return `${tile.key}:${connector || 'center_front'}`;
+  }
   return tile.type === 'corner' ? `${tile.key}:${connector}` : `${tile.key}:center`;
 }
 
 function getTargetNodeId(tile, entryDirection) {
-  return tile.type === 'corner'
-    ? getNodeId(tile, entryDirection)
-    : getNodeId(tile);
+  if (tile.type === 'corner') return getNodeId(tile, entryDirection);
+  if (tile.type === 'ghostchamber') return getNodeId(tile, 'center_front');
+  return getNodeId(tile);
 }
 
 function getCornerTurnPoints(tile, fromConnector, toConnector) {
@@ -144,14 +147,34 @@ function buildNavigationGraph(mazeGraph) {
     const id = getNodeId(tile, connector);
     if (nodes.has(id)) return nodes.get(id);
 
+    let position;
+    let type = 'center';
+    
+    if (tile.type === 'corner') {
+      position = getCornerBendEntrancePoint(tile, connector);
+      type = 'corner';
+    } else if (tile.type === 'ghostchamber') {
+      const localCoords = {
+        'left_back': { x: -6, z: 8.5 },
+        'center_back': { x: 0, z: 8.5 },
+        'right_back': { x: 6, z: 8.5 },
+        'left_front': { x: -6, z: 0 },
+        'center_front': { x: 0, z: 0 },
+        'right_front': { x: 6, z: 0 }
+      }[connector];
+      const rotated = rotateLocalPoint(new THREE.Vector3(localCoords.x, 0, localCoords.z), tile.rotation);
+      position = getTileCenter(tile).add(rotated);
+      type = 'ghostchamber';
+    } else {
+      position = getTileCenter(tile);
+    }
+
     const node = {
       id,
       tile,
       connector,
-      type: tile.type === 'corner' ? 'corner' : 'center',
-      position: tile.type === 'corner'
-        ? getCornerBendEntrancePoint(tile, connector)
-        : getTileCenter(tile),
+      type,
+      position,
       edges: []
     };
 
@@ -162,6 +185,8 @@ function buildNavigationGraph(mazeGraph) {
   mazeGraph.tiles.forEach((tile) => {
     if (tile.type === 'corner') {
       tile.connectors.forEach((connector) => addNode(tile, connector));
+    } else if (tile.type === 'ghostchamber') {
+      ['left_back', 'center_back', 'right_back', 'left_front', 'center_front', 'right_front'].forEach(c => addNode(tile, c));
     } else {
       addNode(tile);
     }
@@ -172,6 +197,57 @@ function buildNavigationGraph(mazeGraph) {
   }
 
   mazeGraph.tiles.forEach((tile) => {
+    if (tile.type === 'ghostchamber') {
+      const localNorth = getAbsoluteDirections(['north'], tile.rotation)[0];
+      const localSouth = getAbsoluteDirections(['south'], tile.rotation)[0];
+      const localEast = getAbsoluteDirections(['east'], tile.rotation)[0];
+      const localWest = getAbsoluteDirections(['west'], tile.rotation)[0];
+
+      const addInternalEdge = (fromId, toId, direction) => {
+        const fromNode = nodes.get(getNodeId(tile, fromId));
+        const toNode = nodes.get(getNodeId(tile, toId));
+        const points = [fromNode.position, toNode.position];
+        fromNode.edges.push(createEdge(fromNode, toNode, direction, direction, points, {
+          reverseDirection: OPPOSITE_DIRECTIONS[direction],
+          reverseContinueDirection: OPPOSITE_DIRECTIONS[direction]
+        }));
+      };
+
+      addInternalEdge('left_back', 'center_back', localEast);
+      addInternalEdge('center_back', 'left_back', localWest);
+      
+      addInternalEdge('center_back', 'right_back', localEast);
+      addInternalEdge('right_back', 'center_back', localWest);
+
+      addInternalEdge('left_front', 'center_front', localEast);
+      addInternalEdge('center_front', 'left_front', localWest);
+
+      addInternalEdge('center_front', 'right_front', localEast);
+      addInternalEdge('right_front', 'center_front', localWest);
+
+      addInternalEdge('left_back', 'left_front', localNorth);
+      addInternalEdge('left_front', 'left_back', localSouth);
+
+      addInternalEdge('center_back', 'center_front', localNorth);
+      addInternalEdge('center_front', 'center_back', localSouth);
+
+      addInternalEdge('right_back', 'right_front', localNorth);
+      addInternalEdge('right_front', 'right_back', localSouth);
+
+      const neighbor = mazeGraph.getNeighbor(tile, localNorth);
+      if (neighbor && tile.exits.has(localNorth)) {
+        const fromNode = nodes.get(getNodeId(tile, 'center_front'));
+        const toNode = getNodeForTileEntry(neighbor, OPPOSITE_DIRECTIONS[localNorth]);
+        const points = [fromNode.position, getBoundaryPoint(tile, localNorth), toNode.position];
+        fromNode.edges.push(createEdge(fromNode, toNode, localNorth, localNorth, points, {
+          reverseDirection: OPPOSITE_DIRECTIONS[localNorth],
+          reverseContinueDirection: OPPOSITE_DIRECTIONS[localNorth]
+        }));
+      }
+
+      return;
+    }
+
     if (tile.type !== 'corner') {
       const fromNode = nodes.get(getNodeId(tile));
 
