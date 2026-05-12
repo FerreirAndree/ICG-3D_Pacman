@@ -68,6 +68,9 @@ function getNodeId(tile, connector = null) {
   if (tile.type === 'ghostchamber') {
     return `${tile.key}:${connector || 'center_front'}`;
   }
+  if (tile.type === 'teleport' && connector === 'event_horizon') {
+    return `${tile.key}:event_horizon`;
+  }
   return tile.type === 'corner' ? `${tile.key}:${connector}` : `${tile.key}:center`;
 }
 
@@ -165,6 +168,15 @@ function buildNavigationGraph(mazeGraph) {
       const rotated = rotateLocalPoint(new THREE.Vector3(localCoords.x, 0, localCoords.z), tile.rotation);
       position = getTileCenter(tile).add(rotated);
       type = 'ghostchamber';
+    } else if (tile.type === 'teleport') {
+      if (connector === 'event_horizon') {
+        const localWest = getAbsoluteDirections(['west'], tile.rotation)[0];
+        position = getBoundaryPoint(tile, localWest);
+        type = 'teleport_event_horizon';
+      } else {
+        position = getTileCenter(tile);
+        type = 'center';
+      }
     } else {
       position = getTileCenter(tile);
     }
@@ -187,6 +199,9 @@ function buildNavigationGraph(mazeGraph) {
       tile.connectors.forEach((connector) => addNode(tile, connector));
     } else if (tile.type === 'ghostchamber') {
       ['left_back', 'center_back', 'right_back', 'left_front', 'center_front', 'right_front'].forEach(c => addNode(tile, c));
+    } else if (tile.type === 'teleport') {
+      addNode(tile);
+      addNode(tile, 'event_horizon');
     } else {
       addNode(tile);
     }
@@ -244,6 +259,37 @@ function buildNavigationGraph(mazeGraph) {
           reverseContinueDirection: OPPOSITE_DIRECTIONS[localNorth]
         }));
       }
+
+      return;
+    }
+
+    if (tile.type === 'teleport') {
+      const fromNode = nodes.get(getNodeId(tile));
+      const localWest = getAbsoluteDirections(['west'], tile.rotation)[0];
+      const localEast = getAbsoluteDirections(['east'], tile.rotation)[0];
+
+      const eventHorizonNode = nodes.get(getNodeId(tile, 'event_horizon'));
+      
+      fromNode.edges.push(createEdge(fromNode, eventHorizonNode, localWest, localWest, [fromNode.position, eventHorizonNode.position], {
+        reverseDirection: localEast,
+        reverseContinueDirection: localEast
+      }));
+
+      eventHorizonNode.edges.push(createEdge(eventHorizonNode, fromNode, localEast, localEast, [eventHorizonNode.position, fromNode.position], {
+        reverseDirection: localWest,
+        reverseContinueDirection: localWest
+      }));
+
+      tile.exits.forEach((direction) => {
+        const neighbor = mazeGraph.getNeighbor(tile, direction);
+        const toNode = getNodeForTileEntry(neighbor, OPPOSITE_DIRECTIONS[direction]);
+        const points = [fromNode.position, getBoundaryPoint(tile, direction), toNode.position];
+
+        fromNode.edges.push(createEdge(fromNode, toNode, direction, direction, points, {
+          reverseDirection: OPPOSITE_DIRECTIONS[direction],
+          reverseContinueDirection: OPPOSITE_DIRECTIONS[direction]
+        }));
+      });
 
       return;
     }
@@ -455,6 +501,28 @@ export class PacmanController {
     this.activeEdge = null;
     this.route = null;
     this.forceContinueDirection = null;
+
+    if (this.currentNode.type === 'teleport_event_horizon') {
+      const teleports = Array.from(this.graph.tiles.values()).filter(t => t.type === 'teleport' && t !== this.currentNode.tile);
+      if (teleports.length > 0) {
+        const targetTeleport = teleports[Math.floor(Math.random() * teleports.length)];
+        const targetNode = this.navigationNodes.get(getNodeId(targetTeleport, 'event_horizon'));
+        const localEast = getAbsoluteDirections(['east'], targetTeleport.rotation)[0];
+        
+        this.currentNode = targetNode;
+        this.currentDirection = localEast;
+        this.facingDirection = localEast;
+        this.bodyFacingDirection = localEast;
+        this.model.position.copy(targetNode.position);
+        
+        this.cameraTrail = [targetNode.position.clone()];
+        this.startedIntentEvents.push('reverse_instant');
+      } else {
+        const localEast = getAbsoluteDirections(['east'], this.currentNode.tile.rotation)[0];
+        this.forceContinueDirection = localEast;
+      }
+    }
+
     if (this.boostedBodyTurnEdgesRemaining > 0) {
       this.boostedBodyTurnEdgesRemaining -= 1;
       if (this.boostedBodyTurnEdgesRemaining === 0) {
