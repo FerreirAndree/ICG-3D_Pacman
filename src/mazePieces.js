@@ -414,6 +414,7 @@ function getJunctionMaterial(type) {
   if (junctionMaterialCache.has(type)) return junctionMaterialCache.get(type);
   
   const mat = sharedMaterials.glass.clone();
+  mat.customProgramCacheKey = () => type;
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace(
       '#include <common>',

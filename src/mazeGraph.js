@@ -36,15 +36,8 @@ export const DIRECTION_YAW = {
   west: -Math.PI / 2
 };
 
-export const EXPERIMENTAL_GAME_MAP = [
-  { type: 'crossroad', position: [0, 0, 0], rotation: 0 },
-  { type: 'corner', position: [18, 0, 0], rotation: Math.PI / 2 },
-  { type: 'corner', position: [18, 0, -18], rotation: Math.PI },
-  { type: 'corner', position: [0, 0, -18], rotation: Math.PI * 1.5 },
-  { type: 'corner', position: [-18, 0, 0], rotation: Math.PI * 1.5 },
-  { type: 'corner', position: [-18, 0, 18], rotation: Math.PI * 2 },
-  { type: 'corner', position: [0, 0, 18], rotation: Math.PI * 2.5 }
-];
+import EXPERIMENTAL_GAME_MAP from '../maps/test2.json';
+export { EXPERIMENTAL_GAME_MAP };
 
 export function makeTileKey(x, z) {
   return `${Math.round(x)},${Math.round(z)}`;

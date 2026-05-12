@@ -1,0 +1,884 @@
+[
+  {
+    "type": "corner",
+    "position": [
+      -36,
+      0,
+      -18
+    ],
+    "rotation": 4.71238898038469
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -36,
+      0,
+      0
+    ],
+    "rotation": 7.853981633974483
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -36,
+      0,
+      18
+    ],
+    "rotation": 17.27875959474386
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      -54,
+      0,
+      0
+    ],
+    "rotation": 17.27875959474386
+  },
+  {
+    "type": "straight",
+    "position": [
+      -54,
+      0,
+      -18
+    ],
+    "rotation": 18.84955592153876
+  },
+  {
+    "type": "straight",
+    "position": [
+      -54,
+      0,
+      18
+    ],
+    "rotation": 18.84955592153876
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -36,
+      0,
+      36
+    ],
+    "rotation": 18.84955592153876
+  },
+  {
+    "type": "straight",
+    "position": [
+      -72,
+      0,
+      -36
+    ],
+    "rotation": 23.561944901923454
+  },
+  {
+    "type": "corner",
+    "position": [
+      -90,
+      0,
+      -36
+    ],
+    "rotation": 25.132741228718352
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -90,
+      0,
+      -54
+    ],
+    "rotation": 29.845130209103047
+  },
+  {
+    "type": "corner",
+    "position": [
+      -90,
+      0,
+      -72
+    ],
+    "rotation": 29.845130209103047
+  },
+  {
+    "type": "straight",
+    "position": [
+      -72,
+      0,
+      -72
+    ],
+    "rotation": 29.845130209103047
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -54,
+      0,
+      -72
+    ],
+    "rotation": 34.55751918948774
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      -54,
+      0,
+      -54
+    ],
+    "rotation": 34.55751918948774
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -54,
+      0,
+      -36
+    ],
+    "rotation": 39.26990816987244
+  },
+  {
+    "type": "straight",
+    "position": [
+      -72,
+      0,
+      -54
+    ],
+    "rotation": 39.26990816987244
+  },
+  {
+    "type": "straight",
+    "position": [
+      -36,
+      0,
+      -72
+    ],
+    "rotation": 39.26990816987244
+  },
+  {
+    "type": "corner",
+    "position": [
+      -18,
+      0,
+      -72
+    ],
+    "rotation": 47.12388980384693
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -36,
+      0,
+      -54
+    ],
+    "rotation": 47.12388980384693
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -18,
+      0,
+      -54
+    ],
+    "rotation": 50.265482457436725
+  },
+  {
+    "type": "corner",
+    "position": [
+      -36,
+      0,
+      -36
+    ],
+    "rotation": 50.265482457436725
+  },
+  {
+    "type": "corner",
+    "position": [
+      -18,
+      0,
+      -36
+    ],
+    "rotation": 53.40707511102652
+  },
+  {
+    "type": "corner",
+    "position": [
+      18,
+      0,
+      -36
+    ],
+    "rotation": 67.54424205218059
+  },
+  {
+    "type": "corner",
+    "position": [
+      36,
+      0,
+      -36
+    ],
+    "rotation": 70.68583470577038
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      54,
+      0,
+      -36
+    ],
+    "rotation": 4.71238898038469
+  },
+  {
+    "type": "straight",
+    "position": [
+      54,
+      0,
+      -18
+    ],
+    "rotation": 6.283185307179586
+  },
+  {
+    "type": "corner",
+    "position": [
+      36,
+      0,
+      -18
+    ],
+    "rotation": 9.42477796076938
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      36,
+      0,
+      0
+    ],
+    "rotation": 10.995574287564276
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      54,
+      0,
+      0
+    ],
+    "rotation": 10.995574287564276
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      36,
+      0,
+      18
+    ],
+    "rotation": 20.420352248333657
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      36,
+      0,
+      36
+    ],
+    "rotation": 25.132741228718352
+  },
+  {
+    "type": "straight",
+    "position": [
+      -18,
+      0,
+      18
+    ],
+    "rotation": 26.70353755551325
+  },
+  {
+    "type": "straight",
+    "position": [
+      18,
+      0,
+      18
+    ],
+    "rotation": 26.70353755551325
+  },
+  {
+    "type": "corner",
+    "position": [
+      18,
+      0,
+      36
+    ],
+    "rotation": 29.845130209103047
+  },
+  {
+    "type": "corner",
+    "position": [
+      -18,
+      0,
+      36
+    ],
+    "rotation": 34.55751918948774
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      18,
+      0,
+      54
+    ],
+    "rotation": 37.69911184307754
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -18,
+      0,
+      54
+    ],
+    "rotation": 37.69911184307754
+  },
+  {
+    "type": "straight",
+    "position": [
+      0,
+      0,
+      54
+    ],
+    "rotation": 39.26990816987244
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      54,
+      0,
+      36
+    ],
+    "rotation": 39.26990816987244
+  },
+  {
+    "type": "straight",
+    "position": [
+      54,
+      0,
+      18
+    ],
+    "rotation": 40.840704496667335
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      36,
+      0,
+      54
+    ],
+    "rotation": 40.840704496667335
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      54,
+      0,
+      54
+    ],
+    "rotation": 45.55309347705203
+  },
+  {
+    "type": "straight",
+    "position": [
+      72,
+      0,
+      36
+    ],
+    "rotation": 45.55309347705203
+  },
+  {
+    "type": "corner",
+    "position": [
+      90,
+      0,
+      36
+    ],
+    "rotation": 53.40707511102652
+  },
+  {
+    "type": "straight",
+    "position": [
+      -72,
+      0,
+      0
+    ],
+    "rotation": 54.97787143782142
+  },
+  {
+    "type": "teleport",
+    "position": [
+      -90,
+      0,
+      0
+    ],
+    "rotation": 62.83185307179591
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      -54,
+      0,
+      36
+    ],
+    "rotation": 62.83185307179591
+  },
+  {
+    "type": "straight",
+    "position": [
+      -72,
+      0,
+      36
+    ],
+    "rotation": 64.40264939859081
+  },
+  {
+    "type": "corner",
+    "position": [
+      -90,
+      0,
+      36
+    ],
+    "rotation": 67.54424205218059
+  },
+  {
+    "type": "corner",
+    "position": [
+      -90,
+      0,
+      54
+    ],
+    "rotation": 69.11503837897548
+  },
+  {
+    "type": "corner",
+    "position": [
+      -72,
+      0,
+      54
+    ],
+    "rotation": 72.25663103256527
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -72,
+      0,
+      72
+    ],
+    "rotation": 75.39822368615505
+  },
+  {
+    "type": "corner",
+    "position": [
+      -90,
+      0,
+      72
+    ],
+    "rotation": 80.11061266653972
+  },
+  {
+    "type": "corner",
+    "position": [
+      -90,
+      0,
+      90
+    ],
+    "rotation": 81.68140899333461
+  },
+  {
+    "type": "straight",
+    "position": [
+      -72,
+      0,
+      90
+    ],
+    "rotation": 83.2522053201295
+  },
+  {
+    "type": "straight",
+    "position": [
+      -54,
+      0,
+      90
+    ],
+    "rotation": 83.2522053201295
+  },
+  {
+    "type": "straight",
+    "position": [
+      -36,
+      0,
+      90
+    ],
+    "rotation": 83.2522053201295
+  },
+  {
+    "type": "corner",
+    "position": [
+      -54,
+      0,
+      72
+    ],
+    "rotation": 83.2522053201295
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -54,
+      0,
+      54
+    ],
+    "rotation": 86.39379797371929
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -36,
+      0,
+      54
+    ],
+    "rotation": 91.10618695410396
+  },
+  {
+    "type": "corner",
+    "position": [
+      -36,
+      0,
+      72
+    ],
+    "rotation": 94.24777960769374
+  },
+  {
+    "type": "corner",
+    "position": [
+      -18,
+      0,
+      72
+    ],
+    "rotation": 97.38937226128353
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -18,
+      0,
+      90
+    ],
+    "rotation": 100.53096491487331
+  },
+  {
+    "type": "straight",
+    "position": [
+      0,
+      0,
+      90
+    ],
+    "rotation": 102.1017612416682
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      18,
+      0,
+      90
+    ],
+    "rotation": 106.81415022205287
+  },
+  {
+    "type": "straight",
+    "position": [
+      36,
+      0,
+      90
+    ],
+    "rotation": 108.38494654884776
+  },
+  {
+    "type": "straight",
+    "position": [
+      54,
+      0,
+      90
+    ],
+    "rotation": 108.38494654884776
+  },
+  {
+    "type": "corner",
+    "position": [
+      18,
+      0,
+      72
+    ],
+    "rotation": 111.52653920243755
+  },
+  {
+    "type": "corner",
+    "position": [
+      36,
+      0,
+      72
+    ],
+    "rotation": 114.66813185602733
+  },
+  {
+    "type": "corner",
+    "position": [
+      54,
+      0,
+      72
+    ],
+    "rotation": 119.380520836412
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      72,
+      0,
+      72
+    ],
+    "rotation": 119.380520836412
+  },
+  {
+    "type": "corner",
+    "position": [
+      72,
+      0,
+      54
+    ],
+    "rotation": 124.09290981679668
+  },
+  {
+    "type": "straight",
+    "position": [
+      72,
+      0,
+      0
+    ],
+    "rotation": 127.23450247038646
+  },
+  {
+    "type": "teleport",
+    "position": [
+      90,
+      0,
+      0
+    ],
+    "rotation": 135.08848410436093
+  },
+  {
+    "type": "straight",
+    "position": [
+      0,
+      0,
+      -54
+    ],
+    "rotation": 136.65928043115582
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      18,
+      0,
+      -54
+    ],
+    "rotation": 138.2300767579507
+  },
+  {
+    "type": "corner",
+    "position": [
+      18,
+      0,
+      -72
+    ],
+    "rotation": 142.9424657383354
+  },
+  {
+    "type": "straight",
+    "position": [
+      36,
+      0,
+      -72
+    ],
+    "rotation": 142.9424657383354
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      54,
+      0,
+      -72
+    ],
+    "rotation": 147.65485471872006
+  },
+  {
+    "type": "straight",
+    "position": [
+      72,
+      0,
+      -72
+    ],
+    "rotation": 149.22565104551495
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      36,
+      0,
+      -54
+    ],
+    "rotation": 153.93804002589962
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      54,
+      0,
+      -54
+    ],
+    "rotation": 153.93804002589962
+  },
+  {
+    "type": "straight",
+    "position": [
+      72,
+      0,
+      -54
+    ],
+    "rotation": 155.50883635269452
+  },
+  {
+    "type": "straight",
+    "position": [
+      72,
+      0,
+      -36
+    ],
+    "rotation": 155.50883635269452
+  },
+  {
+    "type": "corner",
+    "position": [
+      90,
+      0,
+      -36
+    ],
+    "rotation": 158.6504290062843
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      90,
+      0,
+      -54
+    ],
+    "rotation": 1.5707963267948966
+  },
+  {
+    "type": "corner",
+    "position": [
+      90,
+      0,
+      -72
+    ],
+    "rotation": 3.141592653589793
+  },
+  {
+    "type": "corner",
+    "position": [
+      90,
+      0,
+      54
+    ],
+    "rotation": 7.853981633974483
+  },
+  {
+    "type": "corner",
+    "position": [
+      90,
+      0,
+      72
+    ],
+    "rotation": 9.42477796076938
+  },
+  {
+    "type": "corner",
+    "position": [
+      90,
+      0,
+      90
+    ],
+    "rotation": 14.137166941154069
+  },
+  {
+    "type": "straight",
+    "position": [
+      72,
+      0,
+      90
+    ],
+    "rotation": 14.137166941154069
+  },
+  {
+    "type": "ghostchamber",
+    "position": [
+      0,
+      0,
+      -18
+    ],
+    "rotation": 3.141592653589793
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      18,
+      0,
+      -18
+    ],
+    "rotation": 4.71238898038469
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -18,
+      0,
+      -18
+    ],
+    "rotation": 7.853981633974483
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      0,
+      0,
+      0
+    ],
+    "rotation": 7.853981633974483
+  },
+  {
+    "type": "corner",
+    "position": [
+      -18,
+      0,
+      0
+    ],
+    "rotation": 12.566370614359172
+  },
+  {
+    "type": "corner",
+    "position": [
+      18,
+      0,
+      0
+    ],
+    "rotation": 14.137166941154069
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      0,
+      0,
+      18
+    ],
+    "rotation": 18.84955592153876
+  }
+]
