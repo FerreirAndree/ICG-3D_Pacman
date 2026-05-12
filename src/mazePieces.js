@@ -679,6 +679,7 @@ function createGhostChamberPiece() {
   const shellGeo = new THREE.ExtrudeGeometry(outerShape, extrudeSettings);
   
   const shellMat = sharedMaterials.glass.clone();
+  shellMat.customProgramCacheKey = () => 'ghostchamber';
   shellMat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace(
       '#include <common>',

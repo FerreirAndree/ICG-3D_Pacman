@@ -12,6 +12,7 @@ import { buildShowcase, showcaseLayout, createMazePiece, createPedestal, TILE_SI
 import { createPacman, createGhost, createPellet, createStandardPellet } from './entities.js';
 import { buildMazeGraph, EXPERIMENTAL_GAME_MAP } from './mazeGraph.js';
 import { PacmanController } from './pacmanController.js';
+import { PelletManager } from './pelletManager.js';
 import './style.css';
 
 const scene = new THREE.Scene();
@@ -63,6 +64,10 @@ const uiHtml = `
       <button class="btn" id="btn-toggle-game">Start Game</button>
 
       <div class="game-only-controls" id="game-only-controls" style="display: none; flex-direction: column; gap: 14px;">
+        <div style="display: flex; gap: 10px; margin-bottom: 5px;">
+          <div class="control-label" style="flex: 1; align-self: center;">Pellets: <span id="pellet-counter" style="color: #ffaa00; font-weight: bold;">0</span></div>
+          <button class="btn" id="btn-reset-pellets" style="flex: 1; padding: 6px;">Reset</button>
+        </div>
         <div class="hotkey-list">
           <div class="hotkey-item"><span>Move</span> <span class="hotkey-key">WASD / Arrows</span></div>
           <div class="hotkey-item"><span>Look Back</span> <span class="hotkey-key">Hold Space</span></div>
@@ -224,6 +229,7 @@ const gameMaze = new THREE.Group();
 const gameGraph = buildMazeGraph(EXPERIMENTAL_GAME_MAP);
 let gamePacman = null;
 let gameController = null;
+let pelletManager = new PelletManager(gameMaze);
 let isGameMode = false;
 let isGameLookBackActive = false;
 let previousGameLookBackState = false;
@@ -307,6 +313,8 @@ function buildGameMaze() {
 
   gameController = new PacmanController(gamePacman, gameGraph);
   gameController.reset(gameGraph.getTileAt(0, 0));
+
+  pelletManager.buildFromMap(gameGraph);
 }
 
 buildGameMaze();
@@ -442,6 +450,7 @@ function toggleMode() {
   
   const statusTab = document.querySelector('#mode-status');
   const toggleBtn = document.querySelector('#btn-toggle-mode');
+  const gameBtn = document.querySelector('#btn-toggle-game');
   const editorUi = document.querySelector('#editor-ui');
   const editorControls = document.querySelector('#editor-only-controls');
 
@@ -451,6 +460,7 @@ function toggleMode() {
   toggleBtn.textContent = isEditorMode ? 'Close Editor' : 'Open Editor';
   editorUi.classList.toggle('active', isEditorMode);
   editorControls.style.display = isEditorMode ? 'flex' : 'none';
+  gameBtn.style.display = isEditorMode ? 'none' : 'block';
   
   gridHelper.visible = isEditorMode;
   showcase.visible = !isEditorMode;
@@ -726,6 +736,12 @@ zoomSlider.addEventListener('input', (e) => {
 
 document.querySelector('#btn-toggle-mode').addEventListener('click', toggleMode);
 document.querySelector('#btn-toggle-game').addEventListener('click', toggleGameMode);
+document.querySelector('#btn-reset-pellets').addEventListener('click', () => {
+  if (pelletManager) {
+    pelletManager.reset();
+    document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
+  }
+});
 
 document.querySelectorAll('.toggle-option').forEach(opt => {
   opt.addEventListener('click', () => toggleCamera(opt.dataset.view));
@@ -1356,6 +1372,13 @@ function animate() {
       startedIntent = gameController.consumeStartedIntent();
     }
     updateGameCamera(deltaTime, forceSnap);
+
+    // Update and check pellets
+    pelletManager.update(elapsedTime);
+    const eatenThisFrame = pelletManager.checkCollisions(gamePacman.position);
+    if (eatenThisFrame > 0) {
+      document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
+    }
   }
 
   if (isEditorMode) {
