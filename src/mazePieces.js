@@ -702,7 +702,7 @@ function createGhostChamberPiece() {
       // The shell is rotated -90deg on X, so Local Y becomes World -Z.
       if (vRawPos.y > 6.9) { 
         float distToPipeCenter = sqrt(vRawPos.x * vRawPos.x + vRawPos.z * vRawPos.z);
-        if (distToPipeCenter < 2.45) {
+        if (distToPipeCenter < 2.54) {
             discard;
         }
       }
@@ -837,12 +837,47 @@ function createGhostChamberPiece() {
   });
 
   // 5. Connection Pipe (North)
-  visualGroup.add(
-    createPipeSegment('north', {
-      length: 4.0, 
-      startOffset: 9.5
-    })
-  );
+  const pipe = createPipeSegment('north', {
+    length: 6.55, 
+    startOffset: 6.95
+  });
+  
+  const pipeShell = pipe.children[0];
+  const pipeMat = sharedMaterials.glass.clone();
+  pipeMat.customProgramCacheKey = () => 'ghostchamber_pipe';
+  pipeMat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      `#include <common>
+      varying vec3 vWorldPos;`
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;` 
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <common>',
+      `#include <common>
+      varying vec3 vWorldPos;`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <dithering_fragment>',
+      `#include <dithering_fragment>
+      
+      float rSq = 2.54 * 2.54; 
+      float dy = vWorldPos.y - 3.2;
+      float dz = vWorldPos.z - (-6.95);
+      float distSqX = dy * dy + dz * dz;
+      
+      if (distSqX < rSq) {
+          discard;
+      }
+      `
+    );
+  };
+  pipeShell.material = pipeMat;
+  visualGroup.add(pipe);
 
   // 6. Laser Forcefield Door
   const doorGroup = new THREE.Group();
