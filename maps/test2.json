@@ -1,83 +1,92 @@
 [
-    {
-      "type": "crossroad",
-      "position": [
-        0,
-        0,
-        0
-      ],
-      "rotation": 0
-    },
-    {
-      "type": "ghostchamber",
-      "position": [
-        0,
-        0,
-        -18
-      ],
-      "rotation": 3.141592653589793
-    },
-    {
-      "type": "tjunction",
-      "position": [
-        0,
-        0,
-        18
-      ],
-      "rotation": 6.283185307179586
-    },
-    {
-      "type": "teleport",
-      "position": [
-        -18,
-        0,
-        0
-      ],
-      "rotation": 6.283185307179586
-    },
-    {
-      "type": "teleport",
-      "position": [
-        -18,
-        0,
-        18
-      ],
-      "rotation": 6.283185307179586
-    },
-    {
-      "type": "straight",
-      "position": [
-        18,
-        0,
-        0
-      ],
-      "rotation": 7.853981633974483
-    },
-    {
-      "type": "straight",
-      "position": [
-        18,
-        0,
-        18
-      ],
-      "rotation": 7.853981633974483
-    },
-    {
-      "type": "corner",
-      "position": [
-        36,
-        0,
-        18
-      ],
-      "rotation": 7.853981633974483
-    },
-    {
-      "type": "corner",
-      "position": [
-        36,
-        0,
-        0
-      ],
-      "rotation": 9.42477796076938
-    }
-  ]
+  {
+    "type": "tjunction",
+    "position": [
+      0,
+      0,
+      18
+    ],
+    "rotation": 6.283185307179586,
+    "hasPowerPellet": true
+  },
+  {
+    "type": "teleport",
+    "position": [
+      -18,
+      0,
+      18
+    ],
+    "rotation": 6.283185307179586,
+    "hasPowerPellet": false
+  },
+  {
+    "type": "straight",
+    "position": [
+      18,
+      0,
+      0
+    ],
+    "rotation": 7.853981633974483,
+    "hasPowerPellet": false
+  },
+  {
+    "type": "corner",
+    "position": [
+      36,
+      0,
+      0
+    ],
+    "rotation": 9.42477796076938,
+    "hasPowerPellet": true
+  },
+  {
+    "type": "ghostchamber",
+    "position": [
+      0,
+      0,
+      -18
+    ],
+    "rotation": 3.141592653589793,
+    "hasPowerPellet": false
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      0,
+      0,
+      0
+    ],
+    "rotation": 3.141592653589793,
+    "hasPowerPellet": false
+  },
+  {
+    "type": "teleport",
+    "position": [
+      -18,
+      0,
+      0
+    ],
+    "rotation": 6.283185307179586,
+    "hasPowerPellet": false
+  },
+  {
+    "type": "corner",
+    "position": [
+      36,
+      0,
+      18
+    ],
+    "rotation": 7.853981633974483,
+    "hasPowerPellet": false
+  },
+  {
+    "type": "straight",
+    "position": [
+      18,
+      0,
+      18
+    ],
+    "rotation": 1.5707963267948966,
+    "hasPowerPellet": false
+  }
+]

@@ -367,10 +367,6 @@ export function createPellet() {
   ring.rotation.x = Math.PI / 2;
   group.add(ring);
 
-  // --- Warm Ambient Glow ---
-  const light = new THREE.PointLight(color, 8, 15, 2);
-  group.add(light);
-
   // --- Animation ---
   group.userData = {
     type: 'pellet',
@@ -385,8 +381,6 @@ export function createPellet() {
       // Ring animation
       ring.rotation.z = -time * 3;
       ring.scale.setScalar(1 + Math.sin(time * 4) * 0.1);
-      
-      light.intensity = 6 + Math.sin(time * 6) * 2;
     }
   };
 

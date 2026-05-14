@@ -74,7 +74,8 @@ export function buildMazeGraph(pieces) {
       position: new THREE.Vector3(x, y, z),
       rotation: piece.rotation,
       connectors,
-      exits: new Set()
+      exits: new Set(),
+      hasPowerPellet: piece.hasPowerPellet || false
     });
   });
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TILE_SIZE } from './mazePieces.js';
+import { createPellet } from './entities.js';
 
 export const PELLET_TYPES = {
   STANDARD: 0,
@@ -13,8 +14,11 @@ export class PelletManager {
     // We will initialize the meshes when we parse the map
     this.coreMesh = null;
     this.glowMesh = null;
-    this.pellets = []; // Array to track logical state { position: Vector3, type: number, active: boolean }
+    this.pellets = []; // Array to track logical state { position: Vector3, type: number, active: boolean, mesh: Object3D (for power pellets) }
     
+    this.powerPelletGroup = new THREE.Group();
+    this.scene.add(this.powerPelletGroup);
+
     this.dummy = new THREE.Object3D(); // Helper to compute matrices
   }
 
@@ -27,12 +31,21 @@ export class PelletManager {
       this.pellets = [];
     }
 
+    // Clear power pellets
+    while(this.powerPelletGroup.children.length > 0){
+        this.powerPelletGroup.remove(this.powerPelletGroup.children[0]);
+    }
+    if (!this.scene.children.includes(this.powerPelletGroup)) {
+      this.scene.add(this.powerPelletGroup);
+    }
+
     const positions = [];
 
     // Parse every tile in the maze to determine pellet positions
     mazeGraph.tiles.forEach(tile => {
       const tilePos = tile.position;
       const rotation = tile.rotation;
+      const hasPowerPellet = tile.hasPowerPellet;
 
       // Helper to rotate local coordinate offsets
       const rotateOffset = (x, z) => {
@@ -42,35 +55,61 @@ export class PelletManager {
       };
 
       if (tile.type === 'straight') {
-        positions.push(tilePos.clone().add(rotateOffset(0, -6)));
-        positions.push(tilePos.clone().add(rotateOffset(0, 0)));
-        positions.push(tilePos.clone().add(rotateOffset(0, 6)));
+        positions.push({ pos: tilePos.clone().add(rotateOffset(0, -6)), power: false });
+        positions.push({ pos: tilePos.clone().add(rotateOffset(0, 0)), power: hasPowerPellet });
+        positions.push({ pos: tilePos.clone().add(rotateOffset(0, 6)), power: false });
       } 
       else if (tile.type === 'corner') {
-        positions.push(tilePos.clone().add(rotateOffset(0, -6)));
-        positions.push(tilePos.clone().add(rotateOffset(0, 0)));
-        positions.push(tilePos.clone().add(rotateOffset(6, 0)));
+        const cornerOffset = 3.57 * (1 - Math.SQRT1_2); // 1.0456
+        positions.push({ pos: tilePos.clone().add(rotateOffset(0, -6)), power: false });
+        positions.push({ pos: tilePos.clone().add(rotateOffset(cornerOffset, -cornerOffset)), power: hasPowerPellet });
+        positions.push({ pos: tilePos.clone().add(rotateOffset(6, 0)), power: false });
       }
       else if (tile.type === 'tjunction') {
-        positions.push(tilePos.clone().add(rotateOffset(0, 0)));
-        positions.push(tilePos.clone().add(rotateOffset(0, -6)));
-        positions.push(tilePos.clone().add(rotateOffset(-6, 0)));
-        positions.push(tilePos.clone().add(rotateOffset(6, 0)));
+        positions.push({ pos: tilePos.clone().add(rotateOffset(0, 0)), power: hasPowerPellet });
+        positions.push({ pos: tilePos.clone().add(rotateOffset(0, -6)), power: false });
+        positions.push({ pos: tilePos.clone().add(rotateOffset(-6, 0)), power: false });
+        positions.push({ pos: tilePos.clone().add(rotateOffset(6, 0)), power: false });
       }
       else if (tile.type === 'crossroad') {
-        positions.push(tilePos.clone().add(rotateOffset(0, 0)));
-        positions.push(tilePos.clone().add(rotateOffset(0, -6)));
-        positions.push(tilePos.clone().add(rotateOffset(0, 6)));
-        positions.push(tilePos.clone().add(rotateOffset(-6, 0)));
-        positions.push(tilePos.clone().add(rotateOffset(6, 0)));
+        positions.push({ pos: tilePos.clone().add(rotateOffset(0, 0)), power: hasPowerPellet });
+        positions.push({ pos: tilePos.clone().add(rotateOffset(0, -6)), power: false });
+        positions.push({ pos: tilePos.clone().add(rotateOffset(0, 6)), power: false });
+        positions.push({ pos: tilePos.clone().add(rotateOffset(-6, 0)), power: false });
+        positions.push({ pos: tilePos.clone().add(rotateOffset(6, 0)), power: false });
       }
     });
 
-    this.pellets = positions.map(pos => ({
-      position: pos,
-      type: PELLET_TYPES.STANDARD,
-      active: true
-    }));
+    this.pellets = [];
+    const standardPositions = [];
+
+    positions.forEach(p => {
+        if (p.power) {
+            const powerMesh = createPellet();
+            powerMesh.position.copy(p.pos);
+            powerMesh.position.y = 2.5; // Power pellets float a bit higher
+            powerMesh.scale.setScalar(0.65); // Scale it up to make it stand out
+            this.powerPelletGroup.add(powerMesh);
+
+            this.pellets.push({
+                position: powerMesh.position,
+                type: PELLET_TYPES.POWER,
+                active: true,
+                mesh: powerMesh
+            });
+        } else {
+            standardPositions.push(p.pos);
+        }
+    });
+
+    standardPositions.forEach((pos, i) => {
+        this.pellets.push({
+            position: pos,
+            type: PELLET_TYPES.STANDARD,
+            active: true,
+            meshIndex: i
+        });
+    });
 
     const color = 0xffaa00;
     const geometry = new THREE.SphereGeometry(0.35, 16, 16);
@@ -92,15 +131,15 @@ export class PelletManager {
       depthWrite: false
     });
 
-    this.coreMesh = new THREE.InstancedMesh(geometry, coreMaterial, this.pellets.length);
-    this.glowMesh = new THREE.InstancedMesh(geometry, glowMaterial, this.pellets.length);
+    this.coreMesh = new THREE.InstancedMesh(geometry, coreMaterial, standardPositions.length);
+    this.glowMesh = new THREE.InstancedMesh(geometry, glowMaterial, standardPositions.length);
 
     this.coreMesh.frustumCulled = false;
     this.glowMesh.frustumCulled = false;
 
-    // Apply the initial positions
-    this.pellets.forEach((pellet, i) => {
-      this.dummy.position.copy(pellet.position);
+    // Apply the initial positions for standard pellets
+    standardPositions.forEach((pos, i) => {
+      this.dummy.position.copy(pos);
       this.dummy.scale.set(1, 1, 1);
       this.dummy.updateMatrix();
       this.coreMesh.setMatrixAt(i, this.dummy.matrix);
@@ -133,15 +172,19 @@ export class PelletManager {
         eatenCount++;
 
         // Hide it visually
-        this.dummy.position.copy(pellet.position);
-        this.dummy.scale.set(0, 0, 0); 
-        this.dummy.updateMatrix();
-        
-        this.coreMesh.setMatrixAt(i, this.dummy.matrix);
-        this.glowMesh.setMatrixAt(i, this.dummy.matrix);
-        
-        this.coreMesh.instanceMatrix.needsUpdate = true;
-        this.glowMesh.instanceMatrix.needsUpdate = true;
+        if (pellet.type === PELLET_TYPES.POWER) {
+          pellet.mesh.visible = false;
+        } else {
+          this.dummy.position.copy(pellet.position);
+          this.dummy.scale.set(0, 0, 0); 
+          this.dummy.updateMatrix();
+          
+          this.coreMesh.setMatrixAt(pellet.meshIndex, this.dummy.matrix);
+          this.glowMesh.setMatrixAt(pellet.meshIndex, this.dummy.matrix);
+          
+          this.coreMesh.instanceMatrix.needsUpdate = true;
+          this.glowMesh.instanceMatrix.needsUpdate = true;
+        }
       }
     }
 
@@ -151,17 +194,21 @@ export class PelletManager {
   reset() {
     if (!this.coreMesh) return;
     
-    this.pellets.forEach((pellet, i) => {
+    this.pellets.forEach((pellet) => {
       pellet.active = true;
       
-      this.dummy.position.copy(pellet.position);
-      this.dummy.scale.set(1, 1, 1);
-      this.dummy.updateMatrix();
-      this.coreMesh.setMatrixAt(i, this.dummy.matrix);
+      if (pellet.type === PELLET_TYPES.POWER) {
+        pellet.mesh.visible = true;
+      } else {
+        this.dummy.position.copy(pellet.position);
+        this.dummy.scale.set(1, 1, 1);
+        this.dummy.updateMatrix();
+        this.coreMesh.setMatrixAt(pellet.meshIndex, this.dummy.matrix);
 
-      this.dummy.scale.set(1.4, 1.4, 1.4);
-      this.dummy.updateMatrix();
-      this.glowMesh.setMatrixAt(i, this.dummy.matrix);
+        this.dummy.scale.set(1.4, 1.4, 1.4);
+        this.dummy.updateMatrix();
+        this.glowMesh.setMatrixAt(pellet.meshIndex, this.dummy.matrix);
+      }
     });
 
     this.coreMesh.instanceMatrix.needsUpdate = true;
@@ -179,21 +226,27 @@ export class PelletManager {
   update(time) {
     if (!this.coreMesh) return;
 
-    this.pellets.forEach((pellet, i) => {
+    this.pellets.forEach((pellet) => {
       if (!pellet.active) return;
       
-      this.dummy.position.copy(pellet.position);
-      this.dummy.position.y += Math.sin(time * 4 + pellet.position.x) * 0.005;
-      
-      // Update Core
-      this.dummy.scale.set(1, 1, 1);
-      this.dummy.updateMatrix();
-      this.coreMesh.setMatrixAt(i, this.dummy.matrix);
+      if (pellet.type === PELLET_TYPES.POWER) {
+        if (pellet.mesh.userData.update) {
+            pellet.mesh.userData.update(time);
+        }
+      } else {
+        this.dummy.position.copy(pellet.position);
+        this.dummy.position.y += Math.sin(time * 4 + pellet.position.x) * 0.005;
+        
+        // Update Core
+        this.dummy.scale.set(1, 1, 1);
+        this.dummy.updateMatrix();
+        this.coreMesh.setMatrixAt(pellet.meshIndex, this.dummy.matrix);
 
-      // Update Glow
-      this.dummy.scale.set(1.4, 1.4, 1.4);
-      this.dummy.updateMatrix();
-      this.glowMesh.setMatrixAt(i, this.dummy.matrix);
+        // Update Glow
+        this.dummy.scale.set(1.4, 1.4, 1.4);
+        this.dummy.updateMatrix();
+        this.glowMesh.setMatrixAt(pellet.meshIndex, this.dummy.matrix);
+      }
     });
     
     this.coreMesh.instanceMatrix.needsUpdate = true;

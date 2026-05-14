@@ -109,6 +109,13 @@ const uiHtml = `
   </div>
 
   <div class="editor-ui" id="editor-ui">
+    <div class="left-bar">
+      <div class="separator-label">Items</div>
+      <div class="item-card" data-type="powerpellet">
+        <span class="key-hint">P</span>
+        Power
+      </div>
+    </div>
     <div class="bottom-bar">
       <div class="piece-card active" data-type="straight">
         <span class="key-hint">1</span>
@@ -226,7 +233,6 @@ function createGroundGlow(radius, color, opacity) {
 const showcase = buildShowcase(showcaseLayout);
 const editorMaze = new THREE.Group();
 const gameMaze = new THREE.Group();
-const gameGraph = buildMazeGraph(EXPERIMENTAL_GAME_MAP);
 let gamePacman = null;
 let gameController = null;
 let pelletManager = new PelletManager(gameMaze);
@@ -299,25 +305,57 @@ gameMaze.visible = false;
 function buildGameMaze() {
   gameMaze.clear();
 
-  EXPERIMENTAL_GAME_MAP.forEach((item) => {
+  // If the editor has pieces, use the editor's map instead of the experimental one
+  let mapSource = [];
+  if (editorMaze.children.length > 0) {
+    mapSource = editorMaze.children.map(c => ({
+      type: c.userData.type,
+      position: [c.position.x, c.position.y, c.position.z],
+      rotation: c.userData.rotation,
+      hasPowerPellet: c.userData.hasPowerPellet || false
+    }));
+  } else {
+    mapSource = EXPERIMENTAL_GAME_MAP;
+  }
+
+  mapSource.forEach((item) => {
     const piece = createMazePiece(item.type);
     piece.position.set(...item.position);
     piece.rotation.y = item.rotation;
-    piece.userData = { type: item.type, rotation: item.rotation };
+    piece.userData = { 
+      type: item.type, 
+      rotation: item.rotation,
+      hasPowerPellet: item.hasPowerPellet || false
+    };
     gameMaze.add(piece);
   });
+
+  // Rebuild the graph to ensure it captures the exact state of what was loaded
+  const gamePiecesForGraph = mapSource.map(item => ({
+    type: item.type,
+    position: item.position,
+    rotation: item.rotation,
+    hasPowerPellet: item.hasPowerPellet || false
+  }));
+  
+  const currentGraph = buildMazeGraph(gamePiecesForGraph);
 
   gamePacman = createPacman();
   gamePacman.scale.setScalar(0.32);
   gameMaze.add(gamePacman);
 
-  gameController = new PacmanController(gamePacman, gameGraph);
-  gameController.reset(gameGraph.getTileAt(0, 0));
+  gameController = new PacmanController(gamePacman, currentGraph);
+  
+  // Find a suitable spawn point (first tile in the graph)
+  const spawnTile = Array.from(currentGraph.tiles.values())[0];
+  if (spawnTile) {
+    gameController.reset(spawnTile);
+  }
 
-  pelletManager.buildFromMap(gameGraph);
+  pelletManager.buildFromMap(currentGraph);
 }
 
-buildGameMaze();
+// buildGameMaze(); // We wait for "Start Game" to build it now
 
 // --- Hero Wing (Characters) ---
 // Pushed further back for monumental separation (Row 5 equivalent)
@@ -524,7 +562,8 @@ function enterGameMode() {
   controls.enabled = false;
   controls.enableRotate = false;
 
-  gameController.reset(gameGraph.getTileAt(0, 0));
+  buildGameMaze();
+
   gameCameraState.forward.copy(gameController.getFollowDirection());
   gameCameraState.reverseHoldForward.copy(gameCameraState.forward);
   gameCameraState.target.copy(gameController.getCameraTarget());
@@ -749,8 +788,8 @@ document.querySelectorAll('.toggle-option').forEach(opt => {
 
 // --- Piece Selection ---
 function selectPiece(type) {
-  const cards = document.querySelectorAll('.piece-card');
-  const activeCard = document.querySelector('.piece-card.active');
+  const cards = document.querySelectorAll('.piece-card, .item-card');
+  const activeCard = document.querySelector('.piece-card.active, .item-card.active');
   if (activeCard) activeCard.classList.remove('active');
   
   if (type === null) {
@@ -766,7 +805,7 @@ function selectPiece(type) {
   updateGhostPiece();
 }
 
-document.querySelectorAll('.piece-card').forEach(card => {
+document.querySelectorAll('.piece-card, .item-card').forEach(card => {
   card.addEventListener('click', () => {
     selectPiece(card.dataset.type);
   });
@@ -880,17 +919,38 @@ function isCompatibleWithTeleport(teleport, piece) {
 function updateGhostPiece() {
   removeGhostPiece();
   if (currentPieceType === null) return;
-  ghostPiece = createMazePiece(currentPieceType);
-  ghostPiece.rotation.y = currentRotation;
-  ghostPiece.traverse(obj => {
-    if (obj.material) {
-      obj.material = obj.material.clone();
-      obj.material.transparent = true;
-      obj.material.opacity = 0.4;
-      if (obj.material.color) obj.userData.originalColor = obj.material.color.clone();
-      if (obj.material.emissive) obj.userData.originalEmissive = obj.material.emissive.clone();
-    }
-  });
+  
+  if (currentPieceType === 'powerpellet') {
+    ghostPiece = createPellet();
+    ghostPiece.scale.set(0.4, 0.4, 0.4); // Scale it down for the editor preview
+    ghostPiece.traverse(obj => {
+      if (obj.isLight) {
+        obj.intensity = 0; // Disable light so ghost doesn't light up the scene
+      }
+      if (obj.material) {
+        obj.material = obj.material.clone();
+        obj.material.transparent = true;
+        obj.material.opacity = 0.8;
+        obj.material.depthTest = false;
+        obj.renderOrder = 999;
+        if (obj.material.color) obj.userData.originalColor = obj.material.color.clone();
+        if (obj.material.emissive) obj.userData.originalEmissive = obj.material.emissive.clone();
+        if (obj.material.emissiveIntensity !== undefined) obj.userData.originalEmissiveIntensity = obj.material.emissiveIntensity;
+      }
+    });
+  } else {
+    ghostPiece = createMazePiece(currentPieceType);
+    ghostPiece.rotation.y = currentRotation;
+    ghostPiece.traverse(obj => {
+      if (obj.material) {
+        obj.material = obj.material.clone();
+        obj.material.transparent = true;
+        obj.material.opacity = 0.4;
+        if (obj.material.color) obj.userData.originalColor = obj.material.color.clone();
+        if (obj.material.emissive) obj.userData.originalEmissive = obj.material.emissive.clone();
+      }
+    });
+  }
   scene.add(ghostPiece);
 }
 
@@ -986,7 +1046,8 @@ window.addEventListener('keydown', (e) => {
     '3': 'tjunction',
     '4': 'crossroad',
     '5': 'teleport',
-    '6': 'ghostchamber'
+    '6': 'ghostchamber',
+    'p': 'powerpellet'
   };
   if (pieceKeys[key]) {
     selectPiece(pieceKeys[key]);
@@ -1062,8 +1123,51 @@ function placePiece() {
   const pos = getGridIntersection();
   if (!pos) return;
 
-  // Prevent overlap
   const existing = editorMaze.children.find(c => c.position.x === pos.x && c.position.z === pos.z);
+
+  if (currentPieceType === 'powerpellet') {
+    const validTypes = ['straight', 'corner', 'tjunction', 'crossroad'];
+    if (existing && validTypes.includes(existing.userData.type)) {
+      // Toggle it
+      existing.userData.hasPowerPellet = !existing.userData.hasPowerPellet;
+      
+      // Update visual indicator
+      let indicator = existing.getObjectByName('powerPelletIndicator');
+      if (existing.userData.hasPowerPellet) {
+        if (!indicator) {
+          indicator = createPellet();
+          indicator.name = 'powerPelletIndicator';
+          
+          let localX = 0;
+          let localZ = 0;
+          if (existing.userData.type === 'corner') {
+            const cornerOffset = 3.57 * (1 - Math.SQRT1_2);
+            localX = cornerOffset;
+            localZ = -cornerOffset;
+          }
+          
+          indicator.position.set(localX, 2.5, localZ); // Hover centered inside tube
+          indicator.scale.set(0.4, 0.4, 0.4);
+          
+          // Make it visible through the glass in the editor
+          indicator.traverse(obj => {
+            if (obj.material) {
+              obj.material = obj.material.clone();
+              obj.material.depthTest = false;
+              obj.renderOrder = 998;
+            }
+          });
+          
+          existing.add(indicator);
+        }
+      } else if (indicator) {
+        existing.remove(indicator);
+      }
+    }
+    return;
+  }
+
+  // Prevent overlap for normal pieces
   if (existing) return;
 
   // Check legality
@@ -1104,7 +1208,8 @@ document.querySelector('#btn-modal-copy').addEventListener('click', () => {
   const data = editorMaze.children.map(c => ({
     type: c.userData.type,
     position: [c.position.x, c.position.y, c.position.z],
-    rotation: c.userData.rotation
+    rotation: c.userData.rotation,
+    hasPowerPellet: c.userData.hasPowerPellet || false
   }));
   const json = JSON.stringify(data, null, 2);
   
@@ -1125,7 +1230,8 @@ document.querySelector('#btn-modal-download').addEventListener('click', () => {
   const data = editorMaze.children.map(c => ({
     type: c.userData.type,
     position: [c.position.x, c.position.y, c.position.z],
-    rotation: c.userData.rotation
+    rotation: c.userData.rotation,
+    hasPowerPellet: c.userData.hasPowerPellet || false
   }));
   const json = JSON.stringify(data, null, 2);
   
@@ -1158,7 +1264,39 @@ document.querySelector('#btn-import').addEventListener('click', () => {
       const piece = createMazePiece(item.type);
       piece.position.set(item.position[0], item.position[1], item.position[2]);
       piece.rotation.y = item.rotation;
-      piece.userData = { type: item.type, rotation: item.rotation };
+      piece.userData = { 
+        type: item.type, 
+        rotation: item.rotation,
+        hasPowerPellet: item.hasPowerPellet || false
+      };
+      
+      if (piece.userData.hasPowerPellet) {
+        const indicator = createPellet();
+        indicator.name = 'powerPelletIndicator';
+        
+        let localX = 0;
+        let localZ = 0;
+        if (piece.userData.type === 'corner') {
+          const cornerOffset = 3.57 * (1 - Math.SQRT1_2);
+          localX = cornerOffset;
+          localZ = -cornerOffset;
+        }
+        
+        indicator.position.set(localX, 2.5, localZ);
+        indicator.scale.set(0.4, 0.4, 0.4);
+        
+        // Make it visible through the glass in the editor
+        indicator.traverse(obj => {
+          if (obj.material) {
+            obj.material = obj.material.clone();
+            obj.material.depthTest = false;
+            obj.renderOrder = 998;
+          }
+        });
+        
+        piece.add(indicator);
+      }
+      
       editorMaze.add(piece);
     });
     
@@ -1385,24 +1523,86 @@ function animate() {
     // Sync slider with camera
     zoomSlider.value = camera.position.distanceTo(controls.target);
 
+    // Update any item indicators (like power pellets) so they animate in the editor
+    editorMaze.children.forEach(c => {
+      const indicator = c.getObjectByName('powerPelletIndicator');
+      if (indicator && indicator.userData.update) {
+        indicator.userData.update(elapsedTime);
+      }
+    });
+
     if (ghostPiece) {
       const pos = getGridIntersection();
       if (pos) {
-        ghostPiece.position.set(pos.x, 0, pos.z);
-        ghostPiece.visible = true;
-
-        const legal = isPlacementLegal(currentPieceType, pos, currentRotation);
-        ghostPiece.traverse(obj => {
-          if (obj.material && obj.userData.originalColor) {
-            if (!legal) {
-              obj.material.color.set(0xff0000);
-              if (obj.material.emissive) obj.material.emissive.set(0xaa0000);
-            } else {
-              obj.material.color.copy(obj.userData.originalColor);
-              if (obj.material.emissive) obj.material.emissive.copy(obj.userData.originalEmissive);
+        if (currentPieceType === 'powerpellet') {
+          const existing = editorMaze.children.find(c => c.position.x === pos.x && c.position.z === pos.z);
+          const validTypes = ['straight', 'corner', 'tjunction', 'crossroad'];
+          
+          if (existing && validTypes.includes(existing.userData.type)) {
+            let px = pos.x;
+            let pz = pos.z;
+            
+            if (existing.userData.type === 'corner') {
+              const cornerOffset = 3.57 * (1 - Math.SQRT1_2);
+              const rot = existing.userData.rotation;
+              px += cornerOffset * Math.cos(rot) + (-cornerOffset) * Math.sin(rot);
+              pz += -cornerOffset * Math.sin(rot) + (-cornerOffset) * Math.cos(rot);
+            }
+            
+            ghostPiece.position.set(px, 2.5, pz);
+            ghostPiece.visible = true;
+            
+            ghostPiece.traverse(obj => {
+              if (obj.material && obj.userData.originalColor) {
+                obj.material.color.copy(obj.userData.originalColor);
+                if (obj.material.emissive) {
+                  obj.material.emissive.copy(obj.userData.originalEmissive);
+                  if (obj.userData.originalEmissiveIntensity !== undefined) {
+                    obj.material.emissiveIntensity = obj.userData.originalEmissiveIntensity;
+                  }
+                }
+              }
+            });
+            
+            // Keep floating animation for power pellet ghost
+            if (ghostPiece.userData.update) {
+              ghostPiece.userData.update(elapsedTime);
+            }
+          } else {
+            ghostPiece.position.set(pos.x, 2.5, pos.z);
+            ghostPiece.visible = true;
+            
+            ghostPiece.traverse(obj => {
+              if (obj.material && obj.userData.originalColor) {
+                obj.material.color.set(0xff0000);
+                if (obj.material.emissive) {
+                  obj.material.emissive.set(0xff0000);
+                  obj.material.emissiveIntensity = 2.0; // Lower intensity to avoid blowing out to white in ACESFilmic tone mapping
+                }
+              }
+            });
+            
+            if (ghostPiece.userData.update) {
+              ghostPiece.userData.update(elapsedTime);
             }
           }
-        });
+        } else {
+          ghostPiece.position.set(pos.x, 0, pos.z);
+          ghostPiece.visible = true;
+
+          const legal = isPlacementLegal(currentPieceType, pos, currentRotation);
+          ghostPiece.traverse(obj => {
+            if (obj.material && obj.userData.originalColor) {
+              if (!legal) {
+                obj.material.color.set(0xff0000);
+                if (obj.material.emissive) obj.material.emissive.set(0xaa0000);
+              } else {
+                obj.material.color.copy(obj.userData.originalColor);
+                if (obj.material.emissive) obj.material.emissive.copy(obj.userData.originalEmissive);
+              }
+            }
+          });
+        }
       } else {
         ghostPiece.visible = false;
       }
