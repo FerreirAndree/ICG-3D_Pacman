@@ -1,15 +1,5 @@
 [
   {
-    "type": "tjunction",
-    "position": [
-      0,
-      0,
-      18
-    ],
-    "rotation": 6.283185307179586,
-    "hasPowerPellet": true
-  },
-  {
     "type": "teleport",
     "position": [
       -18,
@@ -17,7 +7,9 @@
       18
     ],
     "rotation": 6.283185307179586,
-    "hasPowerPellet": false
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
   },
   {
     "type": "straight",
@@ -27,7 +19,9 @@
       0
     ],
     "rotation": 7.853981633974483,
-    "hasPowerPellet": false
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 1.5707963267948966
   },
   {
     "type": "corner",
@@ -37,7 +31,9 @@
       0
     ],
     "rotation": 9.42477796076938,
-    "hasPowerPellet": true
+    "hasPowerPellet": true,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
   },
   {
     "type": "ghostchamber",
@@ -47,7 +43,9 @@
       -18
     ],
     "rotation": 3.141592653589793,
-    "hasPowerPellet": false
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
   },
   {
     "type": "crossroad",
@@ -57,7 +55,9 @@
       0
     ],
     "rotation": 3.141592653589793,
-    "hasPowerPellet": false
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": true,
+    "pacmanSpawnRotation": 1.5707963267948966
   },
   {
     "type": "teleport",
@@ -67,7 +67,9 @@
       0
     ],
     "rotation": 6.283185307179586,
-    "hasPowerPellet": false
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
   },
   {
     "type": "corner",
@@ -77,7 +79,9 @@
       18
     ],
     "rotation": 7.853981633974483,
-    "hasPowerPellet": false
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
   },
   {
     "type": "straight",
@@ -87,6 +91,44 @@
       18
     ],
     "rotation": 1.5707963267948966,
-    "hasPowerPellet": false
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      0,
+      0,
+      18
+    ],
+    "rotation": 1.5707963267948966,
+    "hasPowerPellet": true,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      0,
+      0,
+      36
+    ],
+    "rotation": 1.5707963267948966,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "teleport",
+    "position": [
+      -18,
+      0,
+      36
+    ],
+    "rotation": 6.283185307179586,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
   }
 ]

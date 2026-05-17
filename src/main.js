@@ -161,6 +161,29 @@ const uiHtml = `
     </div>
   </div>
 
+  <div class="modal-overlay" id="import-modal">
+    <div class="modal-content" style="width: 400px;">
+      <h3 class="modal-title">Import Maze</h3>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <textarea id="import-textarea" placeholder="Paste your exported maze JSON here..." rows="6" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 8px; padding: 12px; font-family: monospace; resize: vertical; outline: none;"></textarea>
+        <div style="text-align: center; color: rgba(255,255,255,0.4); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;">- OR -</div>
+        <div class="file-drop-zone" id="import-file-zone">
+          <div class="content-wrapper">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <span id="import-file-name">Import File</span>
+          </div>
+          <input type="file" id="import-file" accept=".json">
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn btn-primary" id="btn-modal-import">Import Maze</button>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-close" id="btn-modal-import-close">Cancel</button>
+      </div>
+    </div>
+  </div>
+
 `;
 appContainer.insertAdjacentHTML('beforeend', uiHtml);
 
@@ -1039,7 +1062,8 @@ window.addEventListener('mousemove', (e) => {
 
 window.addEventListener('keydown', (e) => {
   // Block all hotkeys if a modal is open
-  if (document.querySelector('#export-modal').classList.contains('active')) return;
+  if (document.querySelector('#export-modal').classList.contains('active') || 
+      document.querySelector('#import-modal').classList.contains('active')) return;
 
   const key = e.key.toLowerCase();
 
@@ -1177,14 +1201,16 @@ window.addEventListener('mousedown', (e) => {
   if (!isEditorMode || isShiftMode || e.button !== 0) return;
   
   // Block placement if a modal is open
-  if (document.querySelector('#export-modal').classList.contains('active')) return;
+  if (document.querySelector('#export-modal').classList.contains('active') || 
+      document.querySelector('#import-modal').classList.contains('active')) return;
   
   // Prevent placing pieces when clicking UI elements
   if (e.target.closest('.bottom-bar') || 
       e.target.closest('.left-bar') || 
       e.target.closest('.top-controls') || 
       e.target.closest('#command-deck') || 
-      e.target.closest('#export-modal')) {
+      e.target.closest('#export-modal') ||
+      e.target.closest('#import-modal')) {
     return;
   }
   
@@ -1404,14 +1430,116 @@ document.querySelector('#btn-modal-download').addEventListener('click', () => {
 
 // --- Import ---
 document.querySelector('#btn-import').addEventListener('click', (e) => {
-  e.target.blur(); // Ensure button loses focus before prompt blocks thread
-  const json = prompt("Paste your exported maze JSON here:");
-  if (!json) return;
+  e.target.blur();
+  document.querySelector('#import-textarea').value = '';
+  document.querySelector('#import-file').value = '';
+  document.querySelector('#import-file-zone').classList.remove('has-file');
+  document.querySelector('#import-file-name').textContent = 'Import From File';
+  document.querySelector('#import-modal').classList.add('active');
+});
+
+document.querySelector('#btn-modal-import-close').addEventListener('click', () => {
+  document.querySelector('#import-modal').classList.remove('active');
+});
+
+document.querySelector('#import-modal').addEventListener('click', (e) => {
+  if (e.target === document.querySelector('#import-modal')) {
+    document.querySelector('#import-modal').classList.remove('active');
+  }
+});
+
+// Handle file selection to auto-fill textarea
+document.querySelector('#import-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  const zone = document.querySelector('#import-file-zone');
+  const nameSpan = document.querySelector('#import-file-name');
+  
+  if (!file) {
+    zone.classList.remove('has-file');
+    nameSpan.textContent = 'Import From File';
+    return;
+  }
+  
+  zone.classList.add('has-file');
+  nameSpan.textContent = file.name;
+  
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    document.querySelector('#import-textarea').value = event.target.result;
+  };
+  reader.readAsText(file);
+});
+
+document.querySelector('#btn-modal-import').addEventListener('click', () => {
+  const json = document.querySelector('#import-textarea').value.trim();
+  if (!json) {
+    alert("Please paste JSON or select a file first.");
+    return;
+  }
   
   try {
     const data = JSON.parse(json);
     
-    // Clear current maze
+    // --- Validation Step ---
+    if (!Array.isArray(data)) {
+      throw new Error("Imported data must be an array of pieces.");
+    }
+    
+    const validTypes = ['straight', 'corner', 'tjunction', 'crossroad', 'teleport', 'ghostchamber'];
+    let pacmanSpawnCount = 0;
+    let ghostChamberCount = 0;
+    
+    for (let i = 0; i < data.length; i++) {
+      const item = data[i];
+      if (!item.type || !validTypes.includes(item.type)) {
+        throw new Error(`Invalid or missing piece type at index ${i}: ${item.type}`);
+      }
+      if (!Array.isArray(item.position) || item.position.length !== 3) {
+        throw new Error(`Invalid position array at index ${i}. Must have 3 coordinates.`);
+      }
+      
+      const expectedX = Math.round(item.position[0] / TILE_SIZE) * TILE_SIZE;
+      const expectedZ = Math.round(item.position[2] / TILE_SIZE) * TILE_SIZE;
+      if (Math.abs(item.position[0] - expectedX) > 0.1 || Math.abs(item.position[1]) > 0.1 || Math.abs(item.position[2] - expectedZ) > 0.1) {
+        throw new Error(`Invalid position at index ${i}. Must be aligned to the grid (multiples of ${TILE_SIZE}) at Y=0.`);
+      }
+
+      if (typeof item.rotation !== 'number') {
+        throw new Error(`Invalid rotation at index ${i}. Must be a number.`);
+      }
+      
+      const checkOrthogonal = (rot) => {
+        const normalized = ((rot % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        const remainder = normalized % (Math.PI / 2);
+        return remainder < 0.01 || Math.abs(remainder - (Math.PI / 2)) < 0.01;
+      };
+
+      if (!checkOrthogonal(item.rotation)) {
+        throw new Error(`Invalid rotation at index ${i}. Must be a multiple of 90 degrees (PI/2).`);
+      }
+
+      if (item.hasPacmanSpawn) {
+        pacmanSpawnCount++;
+        if (pacmanSpawnCount > 1) {
+          throw new Error("Multiple Pacman spawns detected. Only one is allowed.");
+        }
+        if (typeof item.pacmanSpawnRotation === 'number' && !checkOrthogonal(item.pacmanSpawnRotation)) {
+          throw new Error(`Invalid Pacman spawn rotation at index ${i}. Must be a multiple of 90 degrees.`);
+        }
+        if (item.hasPowerPellet) {
+          throw new Error(`Conflict at index ${i}: A tile cannot have both a Pacman spawn and a Power Pellet.`);
+        }
+      }
+
+      if (item.type === 'ghostchamber') {
+        ghostChamberCount++;
+        if (ghostChamberCount > 1) {
+          throw new Error("Multiple Ghost Chambers detected. Only one is allowed.");
+        }
+      }
+    }
+    
+    // Clear current maze ONLY after validation passes
     while(editorMaze.children.length > 0) {
       editorMaze.remove(editorMaze.children[0]);
     }
@@ -1478,10 +1606,23 @@ document.querySelector('#btn-import').addEventListener('click', (e) => {
       editorMaze.add(piece);
     });
     
-    alert("Maze imported successfully!");
+    document.querySelector('#import-modal').classList.remove('active');
+    
+    // Brief success feedback on the button
+    const btn = document.querySelector('#btn-modal-import');
+    const originalText = btn.textContent;
+    btn.textContent = 'Success!';
+    btn.style.background = '#00ff88';
+    btn.style.color = '#000';
+    setTimeout(() => {
+      btn.textContent = originalText;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 1500);
+    
   } catch (e) {
-    alert("Failed to parse JSON. Make sure it's a valid export.");
-    console.error(e);
+    alert(`Import failed: ${e.message}`);
+    console.error('Import validation error:', e);
   }
 });
 

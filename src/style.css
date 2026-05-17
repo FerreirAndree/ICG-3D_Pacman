@@ -443,6 +443,54 @@ input[type="range"]::-webkit-slider-thumb:hover {
   margin-top: 8px;
 }
 
+.file-drop-zone {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  border: 1px dashed rgba(136, 178, 255, 0.3);
+  border-radius: 8px;
+  background: rgba(36, 98, 255, 0.05);
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #88b2ff;
+}
+
+.file-drop-zone:hover {
+  background: rgba(36, 98, 255, 0.15);
+  border-color: rgba(136, 178, 255, 0.6);
+}
+
+.file-drop-zone .content-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.file-drop-zone span {
+  font-size: 0.8rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.file-drop-zone.has-file {
+  color: #00ff88;
+  border-color: rgba(0, 255, 136, 0.4);
+}
+
+.file-drop-zone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
 .btn-close {
   background: transparent;
   border: none;
