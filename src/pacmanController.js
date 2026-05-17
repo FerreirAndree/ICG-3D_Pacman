@@ -346,7 +346,7 @@ function buildNavigationGraph(mazeGraph) {
   return nodes;
 }
 
-export class PacmanController {
+export class EntityController {
   constructor(model, graph, options = {}) {
     this.model = model;
     this.graph = graph;
@@ -368,9 +368,9 @@ export class PacmanController {
     this.startedIntentEvents = [];
   }
 
-  reset(spawnTile, direction = null) {
-    let connector = null;
-    if (spawnTile.type === 'corner') {
+  reset(spawnTile, direction = null, spawnConnector = null) {
+    let connector = spawnConnector;
+    if (!connector && spawnTile.type === 'corner') {
       connector = spawnTile.connectors[0];
     }
     this.currentNode = this.navigationNodes.get(getNodeId(spawnTile, connector));

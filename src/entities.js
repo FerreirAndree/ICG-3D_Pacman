@@ -266,9 +266,12 @@ export function createGhost(color = 0xff0044) {
     side: THREE.DoubleSide
   });
 
+  const visualGroup = new THREE.Group();
+  group.add(visualGroup);
+  
   const shell = new THREE.Mesh(bodyGeo, shellMaterial);
   shell.renderOrder = 2; // Ensure the glow is drawn ON TOP of the core
-  group.add(shell);
+  visualGroup.add(shell);
 
   // --- Inner Obscuring Core ---
   const coreMaterial = new THREE.MeshBasicMaterial({
@@ -282,14 +285,12 @@ export function createGhost(color = 0xff0044) {
   const innerCore = new THREE.Mesh(bodyGeo, coreMaterial);
   innerCore.scale.set(0.98, 0.98, 0.98);
   innerCore.renderOrder = 1; 
-  group.add(innerCore);
+  visualGroup.add(innerCore);
 
   // --- Animation Settings ---
   const waves = 6;
   const waveAmplitude = 0.35; 
   const waveSpeed = 4.2;
-  
-  let baseY = null;
 
   group.userData = {
     type: 'ghost',
@@ -297,13 +298,8 @@ export function createGhost(color = 0xff0044) {
       // Pass time to the shader for the animated mouth and flashing
       ghostShader.uniforms.uTime.value = time;
       
-      // Capture the initial Y position set by the main scene
-      if (baseY === null) {
-        baseY = group.position.y;
-      }
-      
-      // Levitate around the base position
-      group.position.y = baseY + Math.sin(time * 2.2) * 0.2; 
+      // Levitate locally
+      visualGroup.position.y = Math.sin(time * 2.2) * 0.2; 
       
       for (let i = 0; i < posAttr.count; i++) {
         const origY = originalYs[i];

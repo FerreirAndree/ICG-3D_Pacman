@@ -10,8 +10,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildShowcase, showcaseLayout, createMazePiece, createPedestal, TILE_SIZE, PIECE_CONNECTORS } from './mazePieces.js';
 import { createPacman, createGhost, createPellet, createStandardPellet } from './entities.js';
-import { buildMazeGraph, EXPERIMENTAL_GAME_MAP } from './mazeGraph.js';
-import { PacmanController } from './pacmanController.js';
+import { buildMazeGraph, EXPERIMENTAL_GAME_MAP, getAbsoluteDirections as getGraphAbsoluteDirections } from './mazeGraph.js';
+import { EntityController } from './pacmanController.js';
 import { PelletManager } from './pelletManager.js';
 import './style.css';
 
@@ -68,9 +68,11 @@ const uiHtml = `
           <div class="control-label" style="flex: 1; align-self: center;">Pellets: <span id="pellet-counter" style="color: #ffaa00; font-weight: bold;">0</span></div>
           <button class="btn" id="btn-reset-pellets" style="flex: 1; padding: 6px;">Reset</button>
         </div>
+        <button class="btn" id="btn-swap-puppet" style="margin-top: -5px; padding: 6px; background: rgba(255, 0, 68, 0.2); border-color: rgba(255, 0, 68, 0.3); color: #ff0044;">Control: Pacman</button>
         <div class="hotkey-list">
           <div class="hotkey-item"><span>Move</span> <span class="hotkey-key">WASD / Arrows</span></div>
           <div class="hotkey-item"><span>Look Back</span> <span class="hotkey-key">Hold Space</span></div>
+          <div class="hotkey-item"><span>Swap</span> <span class="hotkey-key">Tab</span></div>
           <div class="hotkey-item"><span>Exit</span> <span class="hotkey-key">Esc</span></div>
         </div>
       </div>
@@ -261,7 +263,11 @@ const showcase = buildShowcase(showcaseLayout);
 const editorMaze = new THREE.Group();
 const gameMaze = new THREE.Group();
 let gamePacman = null;
-let gameController = null;
+let gameGhost = null;
+let pacmanController = null;
+let ghostController = null;
+let activeController = null;
+let activePuppet = 'pacman';
 let pelletManager = new PelletManager(gameMaze);
 let isGameMode = false;
 let isGameLookBackActive = false;
@@ -300,14 +306,22 @@ function rotateFlatVectorToward(current, desired, maxRadians) {
 function getGameCameraRailPoint(distanceBehind, fallbackForward, lookBack = false) {
   if (lookBack) {
     // Project forward along the rail. If it exceeds the current pipe piece, fallback.
-    const routePoint = gameController.getRouteCameraPoint(distanceBehind, false);
+    const routePoint = activeController.getRouteCameraPoint(distanceBehind, false);
     if (routePoint) return routePoint;
     
     // Fallback if we reach the end of the route:
     // fallbackForward points BACKWARDS, so we subtract distanceBehind to place the camera IN FRONT
-    return gameController.getCameraTarget().addScaledVector(fallbackForward, -distanceBehind);
+    return activeController.getCameraTarget().addScaledVector(fallbackForward, -distanceBehind);
   }
-  return gameController.getCameraTrailPoint(distanceBehind, fallbackForward);
+  return activeController.getCameraTrailPoint(distanceBehind, fallbackForward);
+}
+
+function makeGhostVisibleThroughGlass(ghost) {
+  ghost.traverse((object) => {
+    if (!object.material) return;
+
+    object.material.depthTest = false;
+  });
 }
 
 
@@ -377,41 +391,56 @@ function buildGameMaze() {
   gamePacman.scale.setScalar(0.32);
   gameMaze.add(gamePacman);
 
-  gameController = new PacmanController(gamePacman, currentGraph);
+  pacmanController = new EntityController(gamePacman, currentGraph);
   
-  // Find a suitable spawn point
+  gameGhost = createGhost(0xff0044); // Blinky by default
+  gameGhost.scale.setScalar(0.32);
+  makeGhostVisibleThroughGlass(gameGhost);
+  gameMaze.add(gameGhost);
+
+  ghostController = new EntityController(gameGhost, currentGraph, { speed: 12.5 });
+  
+  activeController = pacmanController;
+  activePuppet = 'pacman';
+  const swapBtn = document.querySelector('#btn-swap-puppet');
+  if (swapBtn) swapBtn.textContent = 'Control: Pacman';
+  
+  // Find a suitable spawn point for Pacman
   let spawnTile = null;
   let spawnDirection = null;
+  let ghostSpawnTile = null;
 
   for (const tile of currentGraph.tiles.values()) {
     if (tile.hasPacmanSpawn) {
       spawnTile = tile;
-      
-      // Map rotation to direction
-      // 0 = south, PI/2 = east, PI = north, -PI/2 = west
       const rot = ((tile.pacmanSpawnRotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-      
       if (Math.abs(rot - 0) < 0.1) spawnDirection = 'south';
       else if (Math.abs(rot - Math.PI/2) < 0.1) spawnDirection = 'east';
       else if (Math.abs(rot - Math.PI) < 0.1) spawnDirection = 'north';
       else if (Math.abs(rot - (Math.PI * 1.5)) < 0.1) spawnDirection = 'west';
-      
-      break;
+    }
+    if (tile.type === 'ghostchamber') {
+      ghostSpawnTile = tile;
     }
   }
 
   if (!spawnTile) {
     const validTypes = ['straight', 'corner', 'tjunction', 'crossroad', 'teleport'];
     spawnTile = Array.from(currentGraph.tiles.values()).find(t => validTypes.includes(t.type));
-    
-    // Extreme edge case: if the user built a maze with ONLY a ghost chamber
     if (!spawnTile) {
       spawnTile = Array.from(currentGraph.tiles.values())[0];
     }
   }
 
   if (spawnTile) {
-    gameController.reset(spawnTile, spawnDirection);
+    pacmanController.reset(spawnTile, spawnDirection);
+  }
+
+  if (ghostSpawnTile) {
+    const ghostSpawnDirection = getGraphAbsoluteDirections(['north'], ghostSpawnTile.rotation)[0];
+    ghostController.reset(ghostSpawnTile, ghostSpawnDirection, 'center_back'); 
+  } else if (spawnTile) {
+    ghostController.reset(spawnTile, spawnDirection);
   }
 
   pelletManager.buildFromMap(currentGraph);
@@ -626,9 +655,9 @@ function enterGameMode() {
 
   buildGameMaze();
 
-  gameCameraState.forward.copy(gameController.getFollowDirection());
+  gameCameraState.forward.copy(activeController.getFollowDirection());
   gameCameraState.reverseHoldForward.copy(gameCameraState.forward);
-  gameCameraState.target.copy(gameController.getCameraTarget());
+  gameCameraState.target.copy(activeController.getCameraTarget());
   gameCameraState.position.copy(camera.position);
   gameCameraState.isReversing = false;
   gameCameraState.reversalTimer = 0;
@@ -695,11 +724,11 @@ function beginGameCameraReverseDelay() {
 }
 
 function updateGameCamera(deltaTime, snap = false) {
-  if (!gameController) return;
+  if (!activeController) return;
 
-  const target = gameController.getCameraTarget();
+  const target = activeController.getCameraTarget();
 
-  const desiredForward = gameController.getFollowDirection()
+  const desiredForward = activeController.getFollowDirection()
     .multiplyScalar(isGameLookBackActive ? -1 : 1);
   const lookBackChanged = isGameLookBackActive !== previousGameLookBackState;
   
@@ -727,7 +756,7 @@ function updateGameCamera(deltaTime, snap = false) {
     if (gameCameraState.isReversing) {
       gameCameraState.reversalTimer -= deltaTime;
       // Abort the delay instantly if the timer expires OR if Pacman hits a wall and stops
-      if (gameCameraState.reversalTimer <= 0 || !gameController.isMoving) {
+      if (gameCameraState.reversalTimer <= 0 || !activeController.isMoving) {
         // Time's up or we hit a wall: snap to correct behind view
         gameCameraState.isReversing = false;
         gameCameraState.forward.copy(desiredForward).normalize();
@@ -842,6 +871,34 @@ document.querySelector('#btn-reset-pellets').addEventListener('click', () => {
     pelletManager.reset();
     document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
   }
+});
+
+document.querySelector('#btn-swap-puppet').addEventListener('click', (e) => {
+  e.target.blur();
+  if (!isGameMode) return;
+  if (activePuppet === 'pacman') {
+    activePuppet = 'ghost';
+    activeController = ghostController;
+    e.target.textContent = 'Control: Ghost';
+    e.target.style.background = 'rgba(255, 68, 187, 0.2)';
+    e.target.style.borderColor = 'rgba(255, 68, 187, 0.3)';
+    e.target.style.color = '#ff44bb';
+  } else {
+    activePuppet = 'pacman';
+    activeController = pacmanController;
+    e.target.textContent = 'Control: Pacman';
+    e.target.style.background = 'rgba(255, 204, 0, 0.2)';
+    e.target.style.borderColor = 'rgba(255, 204, 0, 0.3)';
+    e.target.style.color = '#ffcc00';
+  }
+  
+  gameCameraState.forward.copy(activeController.getFollowDirection());
+  gameCameraState.reverseHoldForward.copy(gameCameraState.forward);
+  gameCameraState.target.copy(activeController.getCameraTarget());
+  gameCameraState.isReversing = false;
+  gameCameraState.reversalTimer = 0;
+  gameCameraState.reverseSnapFramesRemaining = 0;
+  updateGameCamera(0.016, true);
 });
 
 document.querySelectorAll('.toggle-option').forEach(opt => {
@@ -1085,10 +1142,16 @@ window.addEventListener('keydown', (e) => {
       e.preventDefault();
       if (gameIntent === 'reverse' && e.repeat) return;
 
-      const inputResult = gameController.setDesiredIntent(gameIntent);
+      const inputResult = activeController.setDesiredIntent(gameIntent);
       if (inputResult?.started && inputResult.reverseIntent) {
         beginGameCameraReverseDelay();
       }
+    }
+
+    if (key === 'tab') {
+      e.preventDefault();
+      document.querySelector('#btn-swap-puppet')?.click();
+      return;
     }
 
     if (key === 'escape') {
@@ -1813,21 +1876,29 @@ function animate() {
     stdPellet.userData.update(elapsedTime);
   }
 
-  if (isGameMode && gameController) {
-    gameController.update(deltaTime, elapsedTime);
+  if (isGameMode && activeController) {
+    if (pacmanController) pacmanController.update(deltaTime, elapsedTime);
+    if (ghostController) ghostController.update(deltaTime, elapsedTime);
+
     let forceSnap = false;
-    let startedIntent = gameController.consumeStartedIntent();
+    let startedIntent = activeController.consumeStartedIntent();
     while (startedIntent) {
       if (startedIntent === 'reverse') {
         beginGameCameraReverseDelay();
       } else if (startedIntent === 'reverse_instant') {
         gameCameraState.isReversing = false;
         gameCameraState.reversalTimer = 0;
-        gameCameraState.forward.copy(gameController.getFollowDirection()).normalize();
+        gameCameraState.forward.copy(activeController.getFollowDirection()).normalize();
         forceSnap = true;
       }
-      startedIntent = gameController.consumeStartedIntent();
+      startedIntent = activeController.consumeStartedIntent();
     }
+    
+    const inactiveController = activePuppet === 'pacman' ? ghostController : pacmanController;
+    if (inactiveController) {
+      while(inactiveController.consumeStartedIntent()) {}
+    }
+
     updateGameCamera(deltaTime, forceSnap);
 
     // Update and check pellets

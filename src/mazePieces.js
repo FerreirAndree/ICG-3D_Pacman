@@ -598,39 +598,45 @@ function createEventHorizon(direction) {
 }
 
 export function createMazePiece(type) {
+  let piece;
+
   if (type === 'corner') {
-    return createCornerPiece();
+    piece = createCornerPiece();
+  } else if (type === 'ghostchamber') {
+    piece = createGhostChamberPiece();
+  } else if (type === 'tjunction' || type === 'crossroad') {
+    piece = createJunctionPiece(type);
+  } else {
+    piece = new THREE.Group();
+    piece.userData.type = type;
+
+    const connectors = PIECE_CONNECTORS[type];
+
+    if (!connectors) {
+      throw new Error(`Unknown maze piece type: ${type}`);
+    }
+
+    piece.add(createPedestal());
+    piece.add(createHub());
+
+    connectors.forEach((direction) => {
+      piece.add(createPipeSegment(direction));
+    });
+
+    if (type === 'teleport') {
+      // West end: Event Horizon (the warp terminus)
+      piece.add(createEventHorizon('west'));
+      // East end: Normal open pipe (no cap — connects to the maze)
+    }
   }
 
-  if (type === 'ghostchamber') {
-    return createGhostChamberPiece();
-  }
-
-  if (type === 'tjunction' || type === 'crossroad') {
-    return createJunctionPiece(type);
-  }
-
-  const piece = new THREE.Group();
-  piece.userData.type = type;
-
-  const connectors = PIECE_CONNECTORS[type];
-
-  if (!connectors) {
-    throw new Error(`Unknown maze piece type: ${type}`);
-  }
-
-  piece.add(createPedestal());
-  piece.add(createHub());
-
-  connectors.forEach((direction) => {
-    piece.add(createPipeSegment(direction));
+  // Keep glass before the ghost, but still let it write depth so pellet/portal glows
+  // remain masked by the glass instead of cluttering the view.
+  piece.traverse((obj) => {
+    if (obj.isMesh && obj.material === sharedMaterials.glass) {
+      obj.renderOrder = 1;
+    }
   });
-
-  if (type === 'teleport') {
-    // West end: Event Horizon (the warp terminus)
-    piece.add(createEventHorizon('west'));
-    // East end: Normal open pipe (no cap — connects to the maze)
-  }
 
   return piece;
 }
