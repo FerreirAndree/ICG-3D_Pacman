@@ -75,7 +75,9 @@ export function buildMazeGraph(pieces) {
       rotation: piece.rotation,
       connectors,
       exits: new Set(),
-      hasPowerPellet: piece.hasPowerPellet || false
+      hasPowerPellet: piece.hasPowerPellet || false,
+      hasPacmanSpawn: piece.hasPacmanSpawn || false,
+      pacmanSpawnRotation: piece.pacmanSpawnRotation || 0
     });
   });
 

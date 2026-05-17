@@ -115,6 +115,10 @@ const uiHtml = `
         <span class="key-hint">P</span>
         Power
       </div>
+      <div class="item-card" data-type="pacmanspawn">
+        <span class="key-hint">S</span>
+        Spawn
+      </div>
     </div>
     <div class="bottom-bar">
       <div class="piece-card active" data-type="straight">
@@ -312,7 +316,9 @@ function buildGameMaze() {
       type: c.userData.type,
       position: [c.position.x, c.position.y, c.position.z],
       rotation: c.userData.rotation,
-      hasPowerPellet: c.userData.hasPowerPellet || false
+      hasPowerPellet: c.userData.hasPowerPellet || false,
+      hasPacmanSpawn: c.userData.hasPacmanSpawn || false,
+      pacmanSpawnRotation: c.userData.pacmanSpawnRotation || 0
     }));
   } else {
     mapSource = EXPERIMENTAL_GAME_MAP;
@@ -325,7 +331,9 @@ function buildGameMaze() {
     piece.userData = { 
       type: item.type, 
       rotation: item.rotation,
-      hasPowerPellet: item.hasPowerPellet || false
+      hasPowerPellet: item.hasPowerPellet || false,
+      hasPacmanSpawn: item.hasPacmanSpawn || false,
+      pacmanSpawnRotation: item.pacmanSpawnRotation || 0
     };
     gameMaze.add(piece);
   });
@@ -335,7 +343,9 @@ function buildGameMaze() {
     type: item.type,
     position: item.position,
     rotation: item.rotation,
-    hasPowerPellet: item.hasPowerPellet || false
+    hasPowerPellet: item.hasPowerPellet || false,
+    hasPacmanSpawn: item.hasPacmanSpawn || false,
+    pacmanSpawnRotation: item.pacmanSpawnRotation || 0
   }));
   
   const currentGraph = buildMazeGraph(gamePiecesForGraph);
@@ -346,10 +356,39 @@ function buildGameMaze() {
 
   gameController = new PacmanController(gamePacman, currentGraph);
   
-  // Find a suitable spawn point (first tile in the graph)
-  const spawnTile = Array.from(currentGraph.tiles.values())[0];
+  // Find a suitable spawn point
+  let spawnTile = null;
+  let spawnDirection = null;
+
+  for (const tile of currentGraph.tiles.values()) {
+    if (tile.hasPacmanSpawn) {
+      spawnTile = tile;
+      
+      // Map rotation to direction
+      // 0 = south, PI/2 = east, PI = north, -PI/2 = west
+      const rot = ((tile.pacmanSpawnRotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      
+      if (Math.abs(rot - 0) < 0.1) spawnDirection = 'south';
+      else if (Math.abs(rot - Math.PI/2) < 0.1) spawnDirection = 'east';
+      else if (Math.abs(rot - Math.PI) < 0.1) spawnDirection = 'north';
+      else if (Math.abs(rot - (Math.PI * 1.5)) < 0.1) spawnDirection = 'west';
+      
+      break;
+    }
+  }
+
+  if (!spawnTile) {
+    const validTypes = ['straight', 'corner', 'tjunction', 'crossroad', 'teleport'];
+    spawnTile = Array.from(currentGraph.tiles.values()).find(t => validTypes.includes(t.type));
+    
+    // Extreme edge case: if the user built a maze with ONLY a ghost chamber
+    if (!spawnTile) {
+      spawnTile = Array.from(currentGraph.tiles.values())[0];
+    }
+  }
+
   if (spawnTile) {
-    gameController.reset(spawnTile);
+    gameController.reset(spawnTile, spawnDirection);
   }
 
   pelletManager.buildFromMap(currentGraph);
@@ -920,19 +959,37 @@ function updateGhostPiece() {
   removeGhostPiece();
   if (currentPieceType === null) return;
   
-  if (currentPieceType === 'powerpellet') {
-    ghostPiece = createPellet();
-    ghostPiece.scale.set(0.4, 0.4, 0.4); // Scale it down for the editor preview
+  if (currentPieceType === 'powerpellet' || currentPieceType === 'pacmanspawn') {
+    if (currentPieceType === 'powerpellet') {
+      ghostPiece = createPellet();
+      ghostPiece.scale.set(0.4, 0.4, 0.4); // Scale it down for the editor preview
+    } else {
+      ghostPiece = createPacman();
+      ghostPiece.scale.setScalar(0.32);
+    }
+    
     ghostPiece.traverse(obj => {
       if (obj.isLight) {
         obj.intensity = 0; // Disable light so ghost doesn't light up the scene
       }
       if (obj.material) {
         obj.material = obj.material.clone();
-        obj.material.transparent = true;
-        obj.material.opacity = 0.8;
-        obj.material.depthTest = false;
-        obj.renderOrder = 999;
+        
+        if (currentPieceType === 'powerpellet') {
+          obj.material.transparent = true;
+          obj.material.opacity = 0.8;
+          obj.material.depthTest = false;
+          obj.renderOrder = 999;
+        } else {
+          // For Pacman, we must keep it opaque. The glass tubes use MeshPhysicalMaterial 
+          // with transmission, which only refracts opaque objects rendered before it.
+          // If we make Pacman transparent, he won't show up through the glass!
+          
+          // Instead, we make it a wireframe! This makes it look like a distinct 
+          // "holographic blueprint" while hovering, without breaking the glass refraction.
+          obj.material.wireframe = true;
+        }
+        
         if (obj.material.color) obj.userData.originalColor = obj.material.color.clone();
         if (obj.material.emissive) obj.userData.originalEmissive = obj.material.emissive.clone();
         if (obj.material.emissiveIntensity !== undefined) obj.userData.originalEmissiveIntensity = obj.material.emissiveIntensity;
@@ -1047,7 +1104,8 @@ window.addEventListener('keydown', (e) => {
     '4': 'crossroad',
     '5': 'teleport',
     '6': 'ghostchamber',
-    'p': 'powerpellet'
+    'p': 'powerpellet',
+    's': 'pacmanspawn'
   };
   if (pieceKeys[key]) {
     selectPiece(pieceKeys[key]);
@@ -1125,18 +1183,93 @@ function placePiece() {
 
   const existing = editorMaze.children.find(c => c.position.x === pos.x && c.position.z === pos.z);
 
-  if (currentPieceType === 'powerpellet') {
+  if (currentPieceType === 'powerpellet' || currentPieceType === 'pacmanspawn') {
     const validTypes = ['straight', 'corner', 'tjunction', 'crossroad'];
+    if (currentPieceType === 'pacmanspawn') validTypes.push('teleport');
+    
     if (existing && validTypes.includes(existing.userData.type)) {
-      // Toggle it
-      existing.userData.hasPowerPellet = !existing.userData.hasPowerPellet;
-      
-      // Update visual indicator
-      let indicator = existing.getObjectByName('powerPelletIndicator');
-      if (existing.userData.hasPowerPellet) {
-        if (!indicator) {
-          indicator = createPellet();
-          indicator.name = 'powerPelletIndicator';
+      if (currentPieceType === 'powerpellet') {
+        if (!existing.userData.hasPowerPellet && existing.userData.hasPacmanSpawn) {
+          existing.userData.hasPacmanSpawn = false;
+          const oldSpawn = existing.getObjectByName('pacmanSpawnIndicator');
+          if (oldSpawn) existing.remove(oldSpawn);
+        }
+        // Toggle it
+        existing.userData.hasPowerPellet = !existing.userData.hasPowerPellet;
+        
+        // Update visual indicator
+        let indicator = existing.getObjectByName('powerPelletIndicator');
+        if (existing.userData.hasPowerPellet) {
+          if (!indicator) {
+            indicator = createPellet();
+            indicator.name = 'powerPelletIndicator';
+            
+            let localX = 0;
+            let localZ = 0;
+            if (existing.userData.type === 'corner') {
+              const cornerOffset = 3.57 * (1 - Math.SQRT1_2);
+              localX = cornerOffset;
+              localZ = -cornerOffset;
+            }
+            
+            indicator.position.set(localX, 2.5, localZ); // Hover centered inside tube
+            indicator.scale.set(0.4, 0.4, 0.4);
+            
+            // Make it visible through the glass in the editor
+            indicator.traverse(obj => {
+              if (obj.material) {
+                obj.material = obj.material.clone();
+                obj.material.depthTest = false;
+                obj.renderOrder = 998;
+              }
+            });
+            
+            existing.add(indicator);
+          }
+        } else if (indicator) {
+          existing.remove(indicator);
+        }
+      } else {
+        // Pacman Spawn
+        if (!existing.userData.hasPacmanSpawn && existing.userData.hasPowerPellet) {
+          existing.userData.hasPowerPellet = false;
+          const oldPellet = existing.getObjectByName('powerPelletIndicator');
+          if (oldPellet) existing.remove(oldPellet);
+        }
+
+        if (existing.userData.hasPacmanSpawn) {
+          const normalizeAngle = (a) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+          const currentRotNorm = normalizeAngle(currentRotation);
+          const existingRotNorm = normalizeAngle(existing.userData.pacmanSpawnRotation);
+
+          if (Math.abs(currentRotNorm - existingRotNorm) < 0.01) {
+            // Toggle off if clicking with the exact same rotation
+            existing.userData.hasPacmanSpawn = false;
+            const oldIndicator = existing.getObjectByName('pacmanSpawnIndicator');
+            if (oldIndicator) existing.remove(oldIndicator);
+          } else {
+            // Update rotation if clicking with a different rotation
+            existing.userData.pacmanSpawnRotation = currentRotation;
+            const indicator = existing.getObjectByName('pacmanSpawnIndicator');
+            if (indicator) {
+              indicator.rotation.y = currentRotation - existing.rotation.y;
+            }
+          }
+        } else {
+          // Remove existing spawn from anywhere else
+          editorMaze.children.forEach(c => {
+            if (c.userData.hasPacmanSpawn) {
+              c.userData.hasPacmanSpawn = false;
+              const oldIndicator = c.getObjectByName('pacmanSpawnIndicator');
+              if (oldIndicator) c.remove(oldIndicator);
+            }
+          });
+
+          existing.userData.hasPacmanSpawn = true;
+          existing.userData.pacmanSpawnRotation = currentRotation;
+          
+          const indicator = createPacman();
+          indicator.name = 'pacmanSpawnIndicator';
           
           let localX = 0;
           let localZ = 0;
@@ -1146,22 +1279,12 @@ function placePiece() {
             localZ = -cornerOffset;
           }
           
-          indicator.position.set(localX, 2.5, localZ); // Hover centered inside tube
-          indicator.scale.set(0.4, 0.4, 0.4);
-          
-          // Make it visible through the glass in the editor
-          indicator.traverse(obj => {
-            if (obj.material) {
-              obj.material = obj.material.clone();
-              obj.material.depthTest = false;
-              obj.renderOrder = 998;
-            }
-          });
+          indicator.position.set(localX, 2.5, localZ);
+          indicator.scale.setScalar(0.32);
+          indicator.rotation.y = currentRotation - existing.rotation.y;
           
           existing.add(indicator);
         }
-      } else if (indicator) {
-        existing.remove(indicator);
       }
     }
     return;
@@ -1209,7 +1332,9 @@ document.querySelector('#btn-modal-copy').addEventListener('click', () => {
     type: c.userData.type,
     position: [c.position.x, c.position.y, c.position.z],
     rotation: c.userData.rotation,
-    hasPowerPellet: c.userData.hasPowerPellet || false
+    hasPowerPellet: c.userData.hasPowerPellet || false,
+    hasPacmanSpawn: c.userData.hasPacmanSpawn || false,
+    pacmanSpawnRotation: c.userData.pacmanSpawnRotation || 0
   }));
   const json = JSON.stringify(data, null, 2);
   
@@ -1231,7 +1356,9 @@ document.querySelector('#btn-modal-download').addEventListener('click', () => {
     type: c.userData.type,
     position: [c.position.x, c.position.y, c.position.z],
     rotation: c.userData.rotation,
-    hasPowerPellet: c.userData.hasPowerPellet || false
+    hasPowerPellet: c.userData.hasPowerPellet || false,
+    hasPacmanSpawn: c.userData.hasPacmanSpawn || false,
+    pacmanSpawnRotation: c.userData.pacmanSpawnRotation || 0
   }));
   const json = JSON.stringify(data, null, 2);
   
@@ -1267,7 +1394,9 @@ document.querySelector('#btn-import').addEventListener('click', () => {
       piece.userData = { 
         type: item.type, 
         rotation: item.rotation,
-        hasPowerPellet: item.hasPowerPellet || false
+        hasPowerPellet: item.hasPowerPellet || false,
+        hasPacmanSpawn: item.hasPacmanSpawn || false,
+        pacmanSpawnRotation: item.pacmanSpawnRotation || 0
       };
       
       if (piece.userData.hasPowerPellet) {
@@ -1293,6 +1422,25 @@ document.querySelector('#btn-import').addEventListener('click', () => {
             obj.renderOrder = 998;
           }
         });
+        
+        piece.add(indicator);
+      }
+
+      if (piece.userData.hasPacmanSpawn) {
+        const indicator = createPacman();
+        indicator.name = 'pacmanSpawnIndicator';
+        
+        let localX = 0;
+        let localZ = 0;
+        if (piece.userData.type === 'corner') {
+          const cornerOffset = 3.57 * (1 - Math.SQRT1_2);
+          localX = cornerOffset;
+          localZ = -cornerOffset;
+        }
+        
+        indicator.position.set(localX, 2.5, localZ);
+        indicator.scale.setScalar(0.32);
+        indicator.rotation.y = piece.userData.pacmanSpawnRotation - piece.rotation.y;
         
         piece.add(indicator);
       }
@@ -1529,14 +1677,19 @@ function animate() {
       if (indicator && indicator.userData.update) {
         indicator.userData.update(elapsedTime);
       }
+      const spawnIndicator = c.getObjectByName('pacmanSpawnIndicator');
+      if (spawnIndicator && spawnIndicator.userData.update) {
+        spawnIndicator.userData.update(elapsedTime);
+      }
     });
 
     if (ghostPiece) {
       const pos = getGridIntersection();
       if (pos) {
-        if (currentPieceType === 'powerpellet') {
+        if (currentPieceType === 'powerpellet' || currentPieceType === 'pacmanspawn') {
           const existing = editorMaze.children.find(c => c.position.x === pos.x && c.position.z === pos.z);
           const validTypes = ['straight', 'corner', 'tjunction', 'crossroad'];
+          if (currentPieceType === 'pacmanspawn') validTypes.push('teleport');
           
           if (existing && validTypes.includes(existing.userData.type)) {
             let px = pos.x;
@@ -1551,14 +1704,25 @@ function animate() {
             
             ghostPiece.position.set(px, 2.5, pz);
             ghostPiece.visible = true;
+            if (currentPieceType === 'pacmanspawn') {
+              ghostPiece.rotation.y = currentRotation;
+            }
             
             ghostPiece.traverse(obj => {
               if (obj.material && obj.userData.originalColor) {
-                obj.material.color.copy(obj.userData.originalColor);
-                if (obj.material.emissive) {
-                  obj.material.emissive.copy(obj.userData.originalEmissive);
-                  if (obj.userData.originalEmissiveIntensity !== undefined) {
-                    obj.material.emissiveIntensity = obj.userData.originalEmissiveIntensity;
+                if (currentPieceType === 'pacmanspawn') {
+                  obj.material.color.set(0x00ffaa); // Mint green hologram
+                  if (obj.material.emissive) {
+                    obj.material.emissive.set(0x00ffaa);
+                    obj.material.emissiveIntensity = 1.0;
+                  }
+                } else {
+                  obj.material.color.copy(obj.userData.originalColor);
+                  if (obj.material.emissive) {
+                    obj.material.emissive.copy(obj.userData.originalEmissive);
+                    if (obj.userData.originalEmissiveIntensity !== undefined) {
+                      obj.material.emissiveIntensity = obj.userData.originalEmissiveIntensity;
+                    }
                   }
                 }
               }
@@ -1571,6 +1735,9 @@ function animate() {
           } else {
             ghostPiece.position.set(pos.x, 2.5, pos.z);
             ghostPiece.visible = true;
+            if (currentPieceType === 'pacmanspawn') {
+              ghostPiece.rotation.y = currentRotation;
+            }
             
             ghostPiece.traverse(obj => {
               if (obj.material && obj.userData.originalColor) {
