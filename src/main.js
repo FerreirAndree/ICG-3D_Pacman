@@ -76,6 +76,7 @@ const uiHtml = `
           <button class="btn" id="btn-reset-pellets" style="flex: 1; padding: 6px;">Reset</button>
         </div>
         <button class="btn" id="btn-swap-puppet" style="margin-top: -5px; padding: 6px; background: rgba(255, 0, 68, 0.2); border-color: rgba(255, 0, 68, 0.3); color: #ff0044;">Control: Pacman</button>
+        <button class="btn" id="btn-toggle-collisions" style="margin-top: -5px; padding: 6px;">Collisions: On</button>
         <button class="btn" id="btn-toggle-jumpscare" style="margin-top: -5px; padding: 6px;">Jumpscare: Off</button>
         <div class="hotkey-list">
           <div class="hotkey-item"><span>Move</span> <span class="hotkey-key">WASD / Arrows</span></div>
@@ -276,11 +277,15 @@ let pacmanController = null;
 let ghostController = null;
 let activeController = null;
 let activePuppet = 'pacman';
+let pacmanSpawnState = null;
+let ghostSpawnState = null;
 let pelletManager = new PelletManager(gameMaze);
 let isGameMode = false;
 let isGameLookBackActive = false;
 let previousGameLookBackState = false;
 let isJumpscareMode = false;
+let areCaptureCollisionsEnabled = true;
+let captureResolveTimer = 0;
 const gameCameraState = {
   forward: new THREE.Vector3(1, 0, 0),
   reverseHoldForward: new THREE.Vector3(1, 0, 0),
@@ -300,6 +305,9 @@ const GAME_CAMERA_HEIGHT = 2;
 const GAME_CAMERA_LOOK_AHEAD = 4.25;
 const GAME_CAMERA_TARGET_HEIGHT = 0.5;
 const GAME_CAMERA_CENTERED_LOOK_AHEAD = 0.75;
+const PACMAN_BODY_RADIUS = 3.5;
+const GHOST_BODY_RADIUS = 2.1;
+const PACMAN_CAPTURE_RESOLVE_DURATION = 1.0;
 
 function rotateFlatVectorToward(current, desired, maxRadians) {
   const from = current.clone().setY(0).normalize();
@@ -341,6 +349,16 @@ function updateJumpscareButton() {
   btn.style.background = isJumpscareMode ? 'rgba(255, 34, 34, 0.2)' : 'rgba(12, 22, 45, 0.84)';
   btn.style.borderColor = isJumpscareMode ? 'rgba(255, 34, 34, 0.4)' : 'rgba(136, 178, 255, 0.2)';
   btn.style.color = isJumpscareMode ? '#ff5555' : '#ffffff';
+}
+
+function updateCollisionsButton() {
+  const btn = document.querySelector('#btn-toggle-collisions');
+  if (!btn) return;
+
+  btn.textContent = areCaptureCollisionsEnabled ? 'Collisions: On' : 'Collisions: Off';
+  btn.style.background = areCaptureCollisionsEnabled ? 'rgba(255, 170, 0, 0.18)' : 'rgba(12, 22, 45, 0.84)';
+  btn.style.borderColor = areCaptureCollisionsEnabled ? 'rgba(255, 170, 0, 0.35)' : 'rgba(136, 178, 255, 0.2)';
+  btn.style.color = areCaptureCollisionsEnabled ? '#ffaa00' : '#ffffff';
 }
 
 function asMaterialList(material) {
@@ -487,6 +505,8 @@ function buildGameMaze() {
   let spawnTile = null;
   let spawnDirection = null;
   let ghostSpawnTile = null;
+  pacmanSpawnState = null;
+  ghostSpawnState = null;
 
   for (const tile of currentGraph.tiles.values()) {
     if (tile.hasPacmanSpawn) {
@@ -511,17 +531,83 @@ function buildGameMaze() {
   }
 
   if (spawnTile) {
-    pacmanController.reset(spawnTile, spawnDirection);
+    pacmanSpawnState = {
+      tile: spawnTile,
+      direction: spawnDirection,
+      connector: null
+    };
+    pacmanController.reset(pacmanSpawnState.tile, pacmanSpawnState.direction, pacmanSpawnState.connector);
   }
 
   if (ghostSpawnTile) {
     const ghostSpawnDirection = getGraphAbsoluteDirections(['north'], ghostSpawnTile.rotation)[0];
-    ghostController.reset(ghostSpawnTile, ghostSpawnDirection, 'center_back'); 
+    ghostSpawnState = {
+      tile: ghostSpawnTile,
+      direction: ghostSpawnDirection,
+      connector: 'center_back'
+    };
   } else if (spawnTile) {
-    ghostController.reset(spawnTile, spawnDirection);
+    ghostSpawnState = {
+      tile: spawnTile,
+      direction: spawnDirection,
+      connector: null
+    };
+  } else {
+    ghostSpawnState = null;
+  }
+
+  if (ghostSpawnState) {
+    ghostController.reset(ghostSpawnState.tile, ghostSpawnState.direction, ghostSpawnState.connector);
   }
 
   pelletManager.buildFromMap(currentGraph);
+}
+
+function resetGameCharactersToSpawn(snapCamera = true) {
+  if (!pacmanController || !ghostController || !pacmanSpawnState || !ghostSpawnState) return;
+
+  pacmanController.reset(pacmanSpawnState.tile, pacmanSpawnState.direction, pacmanSpawnState.connector);
+  ghostController.reset(ghostSpawnState.tile, ghostSpawnState.direction, ghostSpawnState.connector);
+
+  isGameLookBackActive = false;
+  previousGameLookBackState = false;
+  gameCameraState.isReversing = false;
+  gameCameraState.reversalTimer = 0;
+  gameCameraState.reverseSnapFramesRemaining = 0;
+
+  activeController = activePuppet === 'ghost' ? ghostController : pacmanController;
+
+  if (snapCamera && activeController) {
+    gameCameraState.forward.copy(activeController.getFollowDirection()).normalize();
+    gameCameraState.reverseHoldForward.copy(gameCameraState.forward);
+    gameCameraState.target.copy(activeController.getCameraTarget());
+    updateGameCamera(1, true);
+  }
+}
+
+function isPacmanCaptured() {
+  if (!gamePacman || !gameGhost) return false;
+
+  const pacmanRadius = PACMAN_BODY_RADIUS * gamePacman.scale.x;
+  const ghostRadius = GHOST_BODY_RADIUS * gameGhost.scale.x;
+  const captureRadius = pacmanRadius + ghostRadius;
+
+  return gamePacman.position.distanceToSquared(gameGhost.position) <= captureRadius * captureRadius;
+}
+
+function isCaptureResolving() {
+  return captureResolveTimer > 0;
+}
+
+function startPacmanCaptureResolve() {
+  if (isCaptureResolving()) return;
+
+  captureResolveTimer = PACMAN_CAPTURE_RESOLVE_DURATION;
+  isGameLookBackActive = false;
+  previousGameLookBackState = false;
+  gameCameraState.isReversing = false;
+  gameCameraState.reversalTimer = 0;
+  gameCameraState.reverseSnapFramesRemaining = 0;
 }
 
 // buildGameMaze(); // We wait for "Start Game" to build it now
@@ -706,6 +792,8 @@ function enterGameMode() {
   isGameLookBackActive = false;
   previousGameLookBackState = false;
   isJumpscareMode = false;
+  areCaptureCollisionsEnabled = true;
+  captureResolveTimer = 0;
   appContainer.classList.add('game-active');
 
   const statusTab = document.querySelector('#mode-status');
@@ -718,6 +806,7 @@ function enterGameMode() {
   editorBtn.style.display = 'none';
   gameControls.style.display = 'flex';
   updateJumpscareButton();
+  updateCollisionsButton();
 
   showcase.visible = false;
   editorMaze.visible = false;
@@ -750,6 +839,7 @@ function exitGameMode() {
   isGameLookBackActive = false;
   previousGameLookBackState = false;
   isJumpscareMode = false;
+  captureResolveTimer = 0;
   appContainer.classList.remove('game-active');
 
   const statusTab = document.querySelector('#mode-status');
@@ -990,6 +1080,14 @@ document.querySelector('#btn-toggle-jumpscare').addEventListener('click', (e) =>
   updateJumpscareButton();
 });
 
+document.querySelector('#btn-toggle-collisions').addEventListener('click', (e) => {
+  e.target.blur();
+  if (!isGameMode) return;
+
+  areCaptureCollisionsEnabled = !areCaptureCollisionsEnabled;
+  updateCollisionsButton();
+});
+
 document.querySelectorAll('.toggle-option').forEach(opt => {
   opt.addEventListener('click', () => toggleCamera(opt.dataset.view));
 });
@@ -1219,6 +1317,13 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (isGameMode) {
+    if (isCaptureResolving()) {
+      if (key === 'escape') {
+        exitGameMode();
+      }
+      return;
+    }
+
     if (key === ' ') {
       e.preventDefault();
       isGameLookBackActive = true;
@@ -1966,35 +2071,53 @@ function animate() {
   }
 
   if (isGameMode && activeController) {
-    if (pacmanController) pacmanController.update(deltaTime, elapsedTime);
-    if (ghostController) ghostController.update(deltaTime, elapsedTime);
+    if (isCaptureResolving()) {
+      captureResolveTimer = Math.max(0, captureResolveTimer - deltaTime);
 
-    let forceSnap = false;
-    let startedIntent = activeController.consumeStartedIntent();
-    while (startedIntent) {
-      if (startedIntent === 'reverse') {
-        beginGameCameraReverseDelay();
-      } else if (startedIntent === 'reverse_instant') {
-        gameCameraState.isReversing = false;
-        gameCameraState.reversalTimer = 0;
-        gameCameraState.forward.copy(activeController.getFollowDirection()).normalize();
-        forceSnap = true;
+      if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime);
+      if (gameGhost?.userData.update) gameGhost.userData.update(elapsedTime);
+
+      pelletManager.update(elapsedTime);
+      updateGameCamera(deltaTime, false);
+
+      if (!isCaptureResolving()) {
+        resetGameCharactersToSpawn(true);
       }
-      startedIntent = activeController.consumeStartedIntent();
-    }
-    
-    const inactiveController = activePuppet === 'pacman' ? ghostController : pacmanController;
-    if (inactiveController) {
-      while(inactiveController.consumeStartedIntent()) {}
-    }
+    } else {
+      if (pacmanController) pacmanController.update(deltaTime, elapsedTime);
+      if (ghostController) ghostController.update(deltaTime, elapsedTime);
 
-    updateGameCamera(deltaTime, forceSnap);
+      let forceSnap = false;
+      let startedIntent = activeController.consumeStartedIntent();
+      while (startedIntent) {
+        if (startedIntent === 'reverse') {
+          beginGameCameraReverseDelay();
+        } else if (startedIntent === 'reverse_instant') {
+          gameCameraState.isReversing = false;
+          gameCameraState.reversalTimer = 0;
+          gameCameraState.forward.copy(activeController.getFollowDirection()).normalize();
+          forceSnap = true;
+        }
+        startedIntent = activeController.consumeStartedIntent();
+      }
+      
+      const inactiveController = activePuppet === 'pacman' ? ghostController : pacmanController;
+      if (inactiveController) {
+        while(inactiveController.consumeStartedIntent()) {}
+      }
 
-    // Update and check pellets
-    pelletManager.update(elapsedTime);
-    const eatenThisFrame = pelletManager.checkCollisions(gamePacman.position);
-    if (eatenThisFrame > 0) {
-      document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
+      updateGameCamera(deltaTime, forceSnap);
+
+      // Update and check pellets
+      pelletManager.update(elapsedTime);
+      const eatenThisFrame = pelletManager.checkCollisions(gamePacman.position);
+      if (eatenThisFrame > 0) {
+        document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
+      }
+
+      if (areCaptureCollisionsEnabled && isPacmanCaptured()) {
+        startPacmanCaptureResolve();
+      }
     }
   }
 
