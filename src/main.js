@@ -1019,6 +1019,18 @@ function removeGhostPiece() {
 }
 
 // --- Interaction Events ---
+// Remove focus from UI elements after clicking so keyboard controls work properly
+window.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (btn) btn.blur();
+  
+  if (e.target.tagName === 'INPUT') {
+    // For range sliders, we might want to keep focus while dragging, 
+    // but blur on mouseup/click to restore game controls
+    e.target.blur();
+  }
+});
+
 window.addEventListener('mousemove', (e) => {
   if (!isEditorMode) return;
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -1026,6 +1038,9 @@ window.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  // Block all hotkeys if a modal is open
+  if (document.querySelector('#export-modal').classList.contains('active')) return;
+
   const key = e.key.toLowerCase();
 
   // --- Capture Tool ---
@@ -1117,6 +1132,7 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (key === ' ') {
+    e.preventDefault();
     placePiece();
   }
 
@@ -1159,7 +1175,19 @@ window.addEventListener('keyup', (e) => {
 
 window.addEventListener('mousedown', (e) => {
   if (!isEditorMode || isShiftMode || e.button !== 0) return;
-  if (e.target.closest('.bottom-bar') || e.target.closest('.top-controls') || e.target.closest('#command-deck')) return;
+  
+  // Block placement if a modal is open
+  if (document.querySelector('#export-modal').classList.contains('active')) return;
+  
+  // Prevent placing pieces when clicking UI elements
+  if (e.target.closest('.bottom-bar') || 
+      e.target.closest('.left-bar') || 
+      e.target.closest('.top-controls') || 
+      e.target.closest('#command-deck') || 
+      e.target.closest('#export-modal')) {
+    return;
+  }
+  
   placePiece();
 });
 
@@ -1311,7 +1339,8 @@ function deletePieceAtCursor() {
 }
 
 // --- Export ---
-document.querySelector('#btn-export').addEventListener('click', () => {
+document.querySelector('#btn-export').addEventListener('click', (e) => {
+  e.target.blur();
   document.querySelector('#export-modal').classList.add('active');
 });
 
@@ -1374,7 +1403,8 @@ document.querySelector('#btn-modal-download').addEventListener('click', () => {
 });
 
 // --- Import ---
-document.querySelector('#btn-import').addEventListener('click', () => {
+document.querySelector('#btn-import').addEventListener('click', (e) => {
+  e.target.blur(); // Ensure button loses focus before prompt blocks thread
   const json = prompt("Paste your exported maze JSON here:");
   if (!json) return;
   
