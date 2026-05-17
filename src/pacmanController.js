@@ -369,7 +369,11 @@ export class PacmanController {
   }
 
   reset(spawnTile, direction = null) {
-    this.currentNode = this.navigationNodes.get(getNodeId(spawnTile));
+    let connector = null;
+    if (spawnTile.type === 'corner') {
+      connector = spawnTile.connectors[0];
+    }
+    this.currentNode = this.navigationNodes.get(getNodeId(spawnTile, connector));
     this.currentDirection = null;
     this.desiredDirection = direction;
     this.desiredIntent = null;
