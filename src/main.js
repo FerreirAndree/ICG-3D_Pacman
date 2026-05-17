@@ -295,6 +295,7 @@ let captureResolveTimer = 0;
 let livesRemaining = 3;
 let isGameOver = false;
 let score = 0;
+let powerPelletTimer = 0;
 const gameCameraState = {
   forward: new THREE.Vector3(1, 0, 0),
   reverseHoldForward: new THREE.Vector3(1, 0, 0),
@@ -320,6 +321,10 @@ const PACMAN_CAPTURE_RESOLVE_DURATION = 1.0;
 const STARTING_LIVES = 3;
 const STANDARD_PELLET_SCORE = 10;
 const POWER_PELLET_SCORE = 50;
+const POWER_PELLET_DURATION = 8.0;
+const POWER_PELLET_FLASH_RATIO = 0.25;
+const POWER_PELLET_MIN_FLASH_DURATION = 1.5;
+const POWER_PELLET_MAX_FLASH_DURATION = 4.0;
 
 function rotateFlatVectorToward(current, desired, maxRadians) {
   const from = current.clone().setY(0).normalize();
@@ -403,6 +408,45 @@ function addPelletScore(eatenPellets) {
 
   score += eatenPellets.reduce((total, pellet) => total + getPelletScore(pellet.type), 0);
   updateScoreUi();
+}
+
+function setGhostVulnerableVisual(isVulnerable) {
+  if (gameGhost?.setVulnerable) {
+    gameGhost.setVulnerable(isVulnerable);
+  }
+}
+
+function getPowerPelletFlashDuration(powerDuration = POWER_PELLET_DURATION) {
+  return THREE.MathUtils.clamp(
+    powerDuration * POWER_PELLET_FLASH_RATIO,
+    POWER_PELLET_MIN_FLASH_DURATION,
+    POWER_PELLET_MAX_FLASH_DURATION
+  );
+}
+
+function startPowerPelletState() {
+  powerPelletTimer = POWER_PELLET_DURATION;
+  setGhostVulnerableVisual(true);
+}
+
+function clearPowerPelletState() {
+  powerPelletTimer = 0;
+  setGhostVulnerableVisual(false);
+}
+
+function updatePowerPelletState(deltaTime) {
+  if (powerPelletTimer <= 0) return;
+
+  powerPelletTimer = Math.max(0, powerPelletTimer - deltaTime);
+  if (powerPelletTimer === 0) {
+    setGhostVulnerableVisual(false);
+  } else if (powerPelletTimer <= getPowerPelletFlashDuration()) {
+    setGhostVulnerableVisual('flashing');
+  }
+}
+
+function didEatPowerPellet(eatenPellets) {
+  return eatenPellets.some((pellet) => pellet.type === PELLET_TYPES.POWER);
 }
 
 function asMaterialList(material) {
@@ -539,6 +583,7 @@ function buildGameMaze() {
   gameMaze.add(gameGhost);
 
   ghostController = new EntityController(gameGhost, currentGraph, { speed: 12.5 });
+  clearPowerPelletState();
   
   activeController = pacmanController;
   activePuppet = 'pacman';
@@ -669,6 +714,7 @@ function restartGameRun() {
   isGameOver = false;
   score = 0;
   captureResolveTimer = 0;
+  clearPowerPelletState();
   pelletManager.reset();
   document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
   updateLivesUi();
@@ -860,6 +906,7 @@ function enterGameMode() {
   isJumpscareMode = false;
   areCaptureCollisionsEnabled = true;
   captureResolveTimer = 0;
+  powerPelletTimer = 0;
   livesRemaining = STARTING_LIVES;
   isGameOver = false;
   score = 0;
@@ -911,6 +958,7 @@ function exitGameMode() {
   previousGameLookBackState = false;
   isJumpscareMode = false;
   captureResolveTimer = 0;
+  clearPowerPelletState();
   isGameOver = false;
   appContainer.classList.remove('game-active');
 
@@ -2159,6 +2207,7 @@ function animate() {
       if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime);
       if (gameGhost?.userData.update) gameGhost.userData.update(elapsedTime);
       pelletManager.update(elapsedTime);
+      updatePowerPelletState(deltaTime);
       updateGameCamera(deltaTime, false);
     } else if (isCaptureResolving()) {
       captureResolveTimer = Math.max(0, captureResolveTimer - deltaTime);
@@ -2167,6 +2216,7 @@ function animate() {
       if (gameGhost?.userData.update) gameGhost.userData.update(elapsedTime);
 
       pelletManager.update(elapsedTime);
+      updatePowerPelletState(deltaTime);
       updateGameCamera(deltaTime, false);
 
       if (!isCaptureResolving()) {
@@ -2199,9 +2249,13 @@ function animate() {
 
       // Update and check pellets
       pelletManager.update(elapsedTime);
+      updatePowerPelletState(deltaTime);
       const eatenPelletsThisFrame = pelletManager.checkCollisions(gamePacman.position);
       if (eatenPelletsThisFrame.length > 0) {
         addPelletScore(eatenPelletsThisFrame);
+        if (didEatPowerPellet(eatenPelletsThisFrame)) {
+          startPowerPelletState();
+        }
         document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
       }
 
