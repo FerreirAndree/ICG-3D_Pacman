@@ -76,6 +76,7 @@ const uiHtml = `
           <button class="btn" id="btn-reset-pellets" style="flex: 1; padding: 6px;">Reset</button>
         </div>
         <button class="btn" id="btn-swap-puppet" style="margin-top: -5px; padding: 6px; background: rgba(255, 0, 68, 0.2); border-color: rgba(255, 0, 68, 0.3); color: #ff0044;">Control: Pacman</button>
+        <button class="btn" id="btn-toggle-jumpscare" style="margin-top: -5px; padding: 6px;">Jumpscare: Off</button>
         <div class="hotkey-list">
           <div class="hotkey-item"><span>Move</span> <span class="hotkey-key">WASD / Arrows</span></div>
           <div class="hotkey-item"><span>Look Back</span> <span class="hotkey-key">Hold Space</span></div>
@@ -279,6 +280,7 @@ let pelletManager = new PelletManager(gameMaze);
 let isGameMode = false;
 let isGameLookBackActive = false;
 let previousGameLookBackState = false;
+let isJumpscareMode = false;
 const gameCameraState = {
   forward: new THREE.Vector3(1, 0, 0),
   reverseHoldForward: new THREE.Vector3(1, 0, 0),
@@ -331,6 +333,16 @@ function makeGhostVisibleThroughGlass(ghost) {
   });
 }
 
+function updateJumpscareButton() {
+  const btn = document.querySelector('#btn-toggle-jumpscare');
+  if (!btn) return;
+
+  btn.textContent = isJumpscareMode ? 'Jumpscare: On' : 'Jumpscare: Off';
+  btn.style.background = isJumpscareMode ? 'rgba(255, 34, 34, 0.2)' : 'rgba(12, 22, 45, 0.84)';
+  btn.style.borderColor = isJumpscareMode ? 'rgba(255, 34, 34, 0.4)' : 'rgba(136, 178, 255, 0.2)';
+  btn.style.color = isJumpscareMode ? '#ff5555' : '#ffffff';
+}
+
 function asMaterialList(material) {
   return Array.isArray(material) ? material : [material];
 }
@@ -376,7 +388,7 @@ function renderSolidDepthOnly() {
 function renderFrame() {
   renderer.clear();
 
-  if (!isGameMode || !gameGhost || !gameGhost.visible) {
+  if (!isGameMode || isJumpscareMode || !gameGhost || !gameGhost.visible) {
     renderer.render(scene, camera);
     return;
   }
@@ -693,6 +705,7 @@ function enterGameMode() {
   isGameMode = true;
   isGameLookBackActive = false;
   previousGameLookBackState = false;
+  isJumpscareMode = false;
   appContainer.classList.add('game-active');
 
   const statusTab = document.querySelector('#mode-status');
@@ -704,6 +717,7 @@ function enterGameMode() {
   gameBtn.textContent = 'End Game';
   editorBtn.style.display = 'none';
   gameControls.style.display = 'flex';
+  updateJumpscareButton();
 
   showcase.visible = false;
   editorMaze.visible = false;
@@ -735,6 +749,7 @@ function exitGameMode() {
   isGameMode = false;
   isGameLookBackActive = false;
   previousGameLookBackState = false;
+  isJumpscareMode = false;
   appContainer.classList.remove('game-active');
 
   const statusTab = document.querySelector('#mode-status');
@@ -965,6 +980,14 @@ document.querySelector('#btn-swap-puppet').addEventListener('click', (e) => {
   gameCameraState.reversalTimer = 0;
   gameCameraState.reverseSnapFramesRemaining = 0;
   updateGameCamera(0.016, true);
+});
+
+document.querySelector('#btn-toggle-jumpscare').addEventListener('click', (e) => {
+  e.target.blur();
+  if (!isGameMode) return;
+
+  isJumpscareMode = !isJumpscareMode;
+  updateJumpscareButton();
 });
 
 document.querySelectorAll('.toggle-option').forEach(opt => {
