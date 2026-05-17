@@ -12,7 +12,7 @@ import { buildShowcase, showcaseLayout, createMazePiece, createPedestal, TILE_SI
 import { createPacman, createGhost, createPellet, createStandardPellet } from './entities.js';
 import { buildMazeGraph, EXPERIMENTAL_GAME_MAP, getAbsoluteDirections as getGraphAbsoluteDirections } from './mazeGraph.js';
 import { EntityController } from './pacmanController.js';
-import { PelletManager } from './pelletManager.js';
+import { PelletManager, PELLET_TYPES } from './pelletManager.js';
 import './style.css';
 
 const scene = new THREE.Scene();
@@ -73,7 +73,13 @@ const uiHtml = `
       <div class="game-only-controls" id="game-only-controls" style="display: none; flex-direction: column; gap: 14px;">
         <div style="display: flex; gap: 10px; margin-bottom: 5px;">
           <div class="control-label" style="flex: 1; align-self: center;">Pellets: <span id="pellet-counter" style="color: #ffaa00; font-weight: bold;">0</span></div>
-          <button class="btn" id="btn-reset-pellets" style="flex: 1; padding: 6px;">Reset</button>
+          <div class="control-label" style="flex: 1; align-self: center;">Lives: <span id="lives-counter" style="color: #ff4444; font-weight: bold;">3</span></div>
+        </div>
+        <div class="control-label" style="text-align: center;">Score: <span id="score-counter" style="color: #00ffaa; font-weight: bold;">0</span></div>
+        <div id="game-state-label" class="control-label" style="display: none; color: #ff4444; font-weight: bold; text-align: center;">Game Over</div>
+        <div style="display: flex; gap: 10px; margin-top: -5px;">
+          <button class="btn" id="btn-reset-pellets" style="flex: 1; padding: 6px;">Reset Pellets</button>
+          <button class="btn" id="btn-reset-run" style="flex: 1; padding: 6px;">Restart Run</button>
         </div>
         <button class="btn" id="btn-swap-puppet" style="margin-top: -5px; padding: 6px; background: rgba(255, 0, 68, 0.2); border-color: rgba(255, 0, 68, 0.3); color: #ff0044;">Control: Pacman</button>
         <button class="btn" id="btn-toggle-collisions" style="margin-top: -5px; padding: 6px;">Collisions: On</button>
@@ -286,6 +292,9 @@ let previousGameLookBackState = false;
 let isJumpscareMode = false;
 let areCaptureCollisionsEnabled = true;
 let captureResolveTimer = 0;
+let livesRemaining = 3;
+let isGameOver = false;
+let score = 0;
 const gameCameraState = {
   forward: new THREE.Vector3(1, 0, 0),
   reverseHoldForward: new THREE.Vector3(1, 0, 0),
@@ -308,6 +317,9 @@ const GAME_CAMERA_CENTERED_LOOK_AHEAD = 0.75;
 const PACMAN_BODY_RADIUS = 3.5;
 const GHOST_BODY_RADIUS = 2.1;
 const PACMAN_CAPTURE_RESOLVE_DURATION = 1.0;
+const STARTING_LIVES = 3;
+const STANDARD_PELLET_SCORE = 10;
+const POWER_PELLET_SCORE = 50;
 
 function rotateFlatVectorToward(current, desired, maxRadians) {
   const from = current.clone().setY(0).normalize();
@@ -359,6 +371,38 @@ function updateCollisionsButton() {
   btn.style.background = areCaptureCollisionsEnabled ? 'rgba(255, 170, 0, 0.18)' : 'rgba(12, 22, 45, 0.84)';
   btn.style.borderColor = areCaptureCollisionsEnabled ? 'rgba(255, 170, 0, 0.35)' : 'rgba(136, 178, 255, 0.2)';
   btn.style.color = areCaptureCollisionsEnabled ? '#ffaa00' : '#ffffff';
+}
+
+function updateLivesUi() {
+  const livesCounter = document.querySelector('#lives-counter');
+  const gameStateLabel = document.querySelector('#game-state-label');
+
+  if (livesCounter) {
+    livesCounter.textContent = livesRemaining;
+  }
+
+  if (gameStateLabel) {
+    gameStateLabel.style.display = isGameOver ? 'block' : 'none';
+  }
+}
+
+function updateScoreUi() {
+  const scoreCounter = document.querySelector('#score-counter');
+  if (scoreCounter) {
+    scoreCounter.textContent = score;
+  }
+}
+
+function getPelletScore(pelletType) {
+  if (pelletType === PELLET_TYPES.POWER) return POWER_PELLET_SCORE;
+  return STANDARD_PELLET_SCORE;
+}
+
+function addPelletScore(eatenPellets) {
+  if (eatenPellets.length === 0) return;
+
+  score += eatenPellets.reduce((total, pellet) => total + getPelletScore(pellet.type), 0);
+  updateScoreUi();
 }
 
 function asMaterialList(material) {
@@ -610,6 +654,28 @@ function startPacmanCaptureResolve() {
   gameCameraState.reverseSnapFramesRemaining = 0;
 }
 
+function finishPacmanCaptureResolve() {
+  livesRemaining = Math.max(0, livesRemaining - 1);
+  isGameOver = livesRemaining === 0;
+  updateLivesUi();
+
+  if (!isGameOver) {
+    resetGameCharactersToSpawn(true);
+  }
+}
+
+function restartGameRun() {
+  livesRemaining = STARTING_LIVES;
+  isGameOver = false;
+  score = 0;
+  captureResolveTimer = 0;
+  pelletManager.reset();
+  document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
+  updateLivesUi();
+  updateScoreUi();
+  resetGameCharactersToSpawn(true);
+}
+
 // buildGameMaze(); // We wait for "Start Game" to build it now
 
 // --- Hero Wing (Characters) ---
@@ -794,6 +860,9 @@ function enterGameMode() {
   isJumpscareMode = false;
   areCaptureCollisionsEnabled = true;
   captureResolveTimer = 0;
+  livesRemaining = STARTING_LIVES;
+  isGameOver = false;
+  score = 0;
   appContainer.classList.add('game-active');
 
   const statusTab = document.querySelector('#mode-status');
@@ -807,6 +876,8 @@ function enterGameMode() {
   gameControls.style.display = 'flex';
   updateJumpscareButton();
   updateCollisionsButton();
+  updateLivesUi();
+  updateScoreUi();
 
   showcase.visible = false;
   editorMaze.visible = false;
@@ -840,6 +911,7 @@ function exitGameMode() {
   previousGameLookBackState = false;
   isJumpscareMode = false;
   captureResolveTimer = 0;
+  isGameOver = false;
   appContainer.classList.remove('game-active');
 
   const statusTab = document.querySelector('#mode-status');
@@ -1042,6 +1114,11 @@ document.querySelector('#btn-reset-pellets').addEventListener('click', () => {
     pelletManager.reset();
     document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
   }
+});
+
+document.querySelector('#btn-reset-run').addEventListener('click', () => {
+  if (!isGameMode) return;
+  restartGameRun();
 });
 
 document.querySelector('#btn-swap-puppet').addEventListener('click', (e) => {
@@ -1317,6 +1394,13 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (isGameMode) {
+    if (isGameOver) {
+      if (key === 'escape') {
+        exitGameMode();
+      }
+      return;
+    }
+
     if (isCaptureResolving()) {
       if (key === 'escape') {
         exitGameMode();
@@ -2071,7 +2155,12 @@ function animate() {
   }
 
   if (isGameMode && activeController) {
-    if (isCaptureResolving()) {
+    if (isGameOver) {
+      if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime);
+      if (gameGhost?.userData.update) gameGhost.userData.update(elapsedTime);
+      pelletManager.update(elapsedTime);
+      updateGameCamera(deltaTime, false);
+    } else if (isCaptureResolving()) {
       captureResolveTimer = Math.max(0, captureResolveTimer - deltaTime);
 
       if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime);
@@ -2081,7 +2170,7 @@ function animate() {
       updateGameCamera(deltaTime, false);
 
       if (!isCaptureResolving()) {
-        resetGameCharactersToSpawn(true);
+        finishPacmanCaptureResolve();
       }
     } else {
       if (pacmanController) pacmanController.update(deltaTime, elapsedTime);
@@ -2110,8 +2199,9 @@ function animate() {
 
       // Update and check pellets
       pelletManager.update(elapsedTime);
-      const eatenThisFrame = pelletManager.checkCollisions(gamePacman.position);
-      if (eatenThisFrame > 0) {
+      const eatenPelletsThisFrame = pelletManager.checkCollisions(gamePacman.position);
+      if (eatenPelletsThisFrame.length > 0) {
+        addPelletScore(eatenPelletsThisFrame);
         document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
       }
 

@@ -157,7 +157,7 @@ export class PelletManager {
   }
 
   checkCollisions(pacmanPosition) {
-    let eatenCount = 0;
+    const eatenPellets = [];
     const EAT_RADIUS = 1.8; 
 
     for (let i = 0; i < this.pellets.length; i++) {
@@ -169,7 +169,7 @@ export class PelletManager {
       if (distSq < EAT_RADIUS * EAT_RADIUS) {
         // Eat it!
         pellet.active = false;
-        eatenCount++;
+        eatenPellets.push(pellet);
 
         // Hide it visually
         if (pellet.type === PELLET_TYPES.POWER) {
@@ -188,7 +188,7 @@ export class PelletManager {
       }
     }
 
-    return eatenCount;
+    return eatenPellets;
   }
 
   reset() {
