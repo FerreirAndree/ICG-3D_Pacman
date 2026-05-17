@@ -55,7 +55,8 @@ function createMaterials() {
       transparent: true,
       side: THREE.DoubleSide,
       attenuationColor: 0xffffff,
-      attenuationDistance: 0.8
+      attenuationDistance: 0.8,
+      userData: { isMazeGlass: true }
     }),
     rim: new THREE.MeshStandardMaterial({
       color: 0x1d4ed8,
@@ -173,7 +174,6 @@ export function createPedestal() {
   const halo = new THREE.Mesh(sharedGeometries.pedestalHalo, sharedMaterials.halo);
   halo.rotation.x = -Math.PI / 2;
   halo.position.y = 0.052;
-
   pedestal.add(base, upperDeck, halo);
   return pedestal;
 }
@@ -414,6 +414,7 @@ function getJunctionMaterial(type) {
   if (junctionMaterialCache.has(type)) return junctionMaterialCache.get(type);
   
   const mat = sharedMaterials.glass.clone();
+  mat.userData.isMazeGlass = true;
   mat.customProgramCacheKey = () => type;
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace(
@@ -630,10 +631,10 @@ export function createMazePiece(type) {
     }
   }
 
-  // Keep glass before the ghost, but still let it write depth so pellet/portal glows
-  // remain masked by the glass instead of cluttering the view.
+  // Glass writes depth so pellet, portal, and laser glow shells stay visually masked
+  // instead of cluttering the view through the tubes.
   piece.traverse((obj) => {
-    if (obj.isMesh && obj.material === sharedMaterials.glass) {
+    if (obj.isMesh && obj.material?.userData?.isMazeGlass) {
       obj.renderOrder = 1;
     }
   });
@@ -685,6 +686,7 @@ function createGhostChamberPiece() {
   const shellGeo = new THREE.ExtrudeGeometry(outerShape, extrudeSettings);
   
   const shellMat = sharedMaterials.glass.clone();
+  shellMat.userData.isMazeGlass = true;
   shellMat.customProgramCacheKey = () => 'ghostchamber';
   shellMat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace(
@@ -850,6 +852,7 @@ function createGhostChamberPiece() {
   
   const pipeShell = pipe.children[0];
   const pipeMat = sharedMaterials.glass.clone();
+  pipeMat.userData.isMazeGlass = true;
   pipeMat.customProgramCacheKey = () => 'ghostchamber_pipe';
   pipeMat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace(

@@ -45,9 +45,16 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
+renderer.autoClear = false;
 renderer.shadowMap.enabled = false;
 const appContainer = document.querySelector('#app');
 appContainer.appendChild(renderer.domElement);
+
+const solidDepthMaterial = new THREE.MeshBasicMaterial({
+  colorWrite: false,
+  depthWrite: true,
+  depthTest: true
+});
 
 // --- UI Injection ---
 const uiHtml = `
@@ -320,8 +327,67 @@ function makeGhostVisibleThroughGlass(ghost) {
   ghost.traverse((object) => {
     if (!object.material) return;
 
-    object.material.depthTest = false;
+    object.material.depthTest = true;
   });
+}
+
+function asMaterialList(material) {
+  return Array.isArray(material) ? material : [material];
+}
+
+function isSolidDepthOccluder(object) {
+  if (!object.isMesh || !object.visible || !object.material) return false;
+
+  return asMaterialList(object.material).every((material) => (
+    material &&
+    material.visible !== false &&
+    material.transparent !== true &&
+    material.opacity !== 0 &&
+    material.depthWrite !== false
+  ));
+}
+
+function renderSolidDepthOnly() {
+  const meshVisibility = [];
+  const previousBackground = scene.background;
+  const previousOverrideMaterial = scene.overrideMaterial;
+
+  scene.traverse((object) => {
+    if (!object.isMesh) return;
+    if (isSolidDepthOccluder(object)) return;
+
+    meshVisibility.push([object, object.visible]);
+    object.visible = false;
+  });
+
+  scene.background = null;
+  scene.overrideMaterial = solidDepthMaterial;
+  try {
+    renderer.render(scene, camera);
+  } finally {
+    scene.overrideMaterial = previousOverrideMaterial;
+    scene.background = previousBackground;
+    meshVisibility.forEach(([object, visible]) => {
+      object.visible = visible;
+    });
+  }
+}
+
+function renderFrame() {
+  renderer.clear();
+
+  if (!isGameMode || !gameGhost || !gameGhost.visible) {
+    renderer.render(scene, camera);
+    return;
+  }
+
+  gameGhost.visible = false;
+  renderer.render(scene, camera);
+  gameGhost.visible = true;
+
+  renderer.clearDepth();
+  renderSolidDepthOnly();
+  renderer.render(gameGhost, camera);
 }
 
 
@@ -2022,7 +2088,7 @@ function animate() {
   if (!isGameMode) {
     controls.update();
   }
-  renderer.render(scene, camera);
+  renderFrame();
   requestAnimationFrame(animate);
 }
 
