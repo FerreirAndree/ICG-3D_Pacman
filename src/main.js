@@ -13,6 +13,7 @@ import { createPacman, createGhost, createPellet, createStandardPellet } from '.
 import { buildMazeGraph, EXPERIMENTAL_GAME_MAP, getAbsoluteDirections as getGraphAbsoluteDirections } from './mazeGraph.js';
 import { EntityController } from './pacmanController.js';
 import { PelletManager, PELLET_TYPES } from './pelletManager.js';
+import { GhostAIController } from './ghostAIController.js';
 import './style.css';
 
 const scene = new THREE.Scene();
@@ -82,6 +83,7 @@ const uiHtml = `
           <button class="btn" id="btn-reset-run" style="flex: 1; padding: 6px;">Restart Run</button>
         </div>
         <button class="btn" id="btn-swap-puppet" style="margin-top: -5px; padding: 6px; background: rgba(255, 0, 68, 0.2); border-color: rgba(255, 0, 68, 0.3); color: #ff0044;">Control: Pacman</button>
+        <button class="btn" id="btn-toggle-ghost-ai" style="margin-top: -5px; padding: 6px;">Ghost AI: Off</button>
         <button class="btn" id="btn-toggle-collisions" style="margin-top: -5px; padding: 6px;">Collisions: On</button>
         <button class="btn" id="btn-toggle-jumpscare" style="margin-top: -5px; padding: 6px;">Jumpscare: Off</button>
         <div class="hotkey-list">
@@ -338,6 +340,7 @@ const GHOST_RESPAWN_DELAY = 1.25;
 const GHOST_NORMAL_SPEED = 12.5;
 const GHOST_VULNERABLE_SPEED = 8.0;
 const GHOST_SCORE_CHAIN = [200, 400, 800, 1600];
+const ghostAI = new GhostAIController();
 
 function rotateFlatVectorToward(current, desired, maxRadians) {
   const from = current.clone().setY(0).normalize();
@@ -389,6 +392,16 @@ function updateCollisionsButton() {
   btn.style.background = areCaptureCollisionsEnabled ? 'rgba(255, 170, 0, 0.18)' : 'rgba(12, 22, 45, 0.84)';
   btn.style.borderColor = areCaptureCollisionsEnabled ? 'rgba(255, 170, 0, 0.35)' : 'rgba(136, 178, 255, 0.2)';
   btn.style.color = areCaptureCollisionsEnabled ? '#ffaa00' : '#ffffff';
+}
+
+function updateGhostAiButton() {
+  const btn = document.querySelector('#btn-toggle-ghost-ai');
+  if (!btn) return;
+
+  btn.textContent = ghostAI.enabled ? 'Ghost AI: On' : 'Ghost AI: Off';
+  btn.style.background = ghostAI.enabled ? 'rgba(0, 255, 170, 0.16)' : 'rgba(12, 22, 45, 0.84)';
+  btn.style.borderColor = ghostAI.enabled ? 'rgba(0, 255, 170, 0.35)' : 'rgba(136, 178, 255, 0.2)';
+  btn.style.color = ghostAI.enabled ? '#00ffaa' : '#ffffff';
 }
 
 function updateLivesUi() {
@@ -507,6 +520,9 @@ function startPowerPelletState() {
     state.eatenDuringCurrentPower = false;
   });
   applyPowerVisualsToGhosts();
+  if (canGhostBeEaten(gameGhost) && !isGhostRespawning()) {
+    ghostAI.forceReverse(ghostController);
+  }
 }
 
 function clearPowerPelletState() {
@@ -572,6 +588,16 @@ function updateGhostRespawn(deltaTime) {
   if (!isGhostRespawning()) {
     resetGhostToSpawn();
   }
+}
+
+function updateGhostAi() {
+  ghostAI.update({
+    ghostController,
+    pacman: gamePacman,
+    ghost: gameGhost,
+    canGhostBeEaten,
+    isGhostRespawning: isGhostRespawning()
+  });
 }
 
 function asMaterialList(material) {
@@ -712,6 +738,7 @@ function buildGameMaze() {
   ghostPowerStates.clear();
   getGhostPowerState(gameGhost);
   ghostRespawnTimer = 0;
+  ghostAI.reset();
   clearPowerPelletState();
   
   activeController = pacmanController;
@@ -796,6 +823,7 @@ function resetGameCharactersToSpawn(snapCamera = true) {
   gameCameraState.reverseSnapFramesRemaining = 0;
 
   activeController = activePuppet === 'ghost' ? ghostController : pacmanController;
+  ghostAI.reset();
 
   if (snapCamera && activeController) {
     gameCameraState.forward.copy(activeController.getFollowDirection()).normalize();
@@ -1043,6 +1071,7 @@ function enterGameMode() {
   isGameLookBackActive = false;
   previousGameLookBackState = false;
   isJumpscareMode = false;
+  ghostAI.setEnabled(false);
   areCaptureCollisionsEnabled = true;
   captureResolveTimer = 0;
   powerPelletTimer = 0;
@@ -1065,6 +1094,7 @@ function enterGameMode() {
   gameControls.style.display = 'flex';
   updateJumpscareButton();
   updateCollisionsButton();
+  updateGhostAiButton();
   updateLivesUi();
   updateScoreUi();
 
@@ -1099,6 +1129,7 @@ function exitGameMode() {
   isGameLookBackActive = false;
   previousGameLookBackState = false;
   isJumpscareMode = false;
+  ghostAI.setEnabled(false);
   captureResolveTimer = 0;
   ghostRespawnTimer = 0;
   clearPowerPelletState();
@@ -1359,6 +1390,14 @@ document.querySelector('#btn-toggle-collisions').addEventListener('click', (e) =
   updateCollisionsButton();
 });
 
+document.querySelector('#btn-toggle-ghost-ai').addEventListener('click', (e) => {
+  e.target.blur();
+  if (!isGameMode) return;
+
+  ghostAI.setEnabled(!ghostAI.enabled);
+  updateGhostAiButton();
+});
+
 document.querySelectorAll('.toggle-option').forEach(opt => {
   opt.addEventListener('click', () => toggleCamera(opt.dataset.view));
 });
@@ -1612,6 +1651,7 @@ window.addEventListener('keydown', (e) => {
 
     if (gameIntent) {
       e.preventDefault();
+      if (activeController === ghostController && ghostAI.enabled) return;
       if (gameIntent === 'reverse' && e.repeat) return;
 
       const inputResult = activeController.setDesiredIntent(gameIntent);
@@ -2372,6 +2412,7 @@ function animate() {
       }
     } else {
       if (pacmanController) pacmanController.update(deltaTime, elapsedTime);
+      updateGhostAi();
       if (ghostController && !isGhostRespawning()) {
         ghostController.update(deltaTime, elapsedTime);
       } else if (gameGhost?.visible && gameGhost.userData.update) {
