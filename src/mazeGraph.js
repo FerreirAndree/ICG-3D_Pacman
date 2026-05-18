@@ -36,7 +36,7 @@ export const DIRECTION_YAW = {
   west: -Math.PI / 2
 };
 
-import EXPERIMENTAL_GAME_MAP from '../maps/test2.json';
+import EXPERIMENTAL_GAME_MAP from '../maps/test3.json';
 export { EXPERIMENTAL_GAME_MAP };
 
 export function makeTileKey(x, z) {
