@@ -304,6 +304,7 @@ let ghostsEatenThisPower = 0;
 let ghostRespawnTimer = 0;
 let currentGameGraph = null;
 const ghostPowerStates = new Map();
+const ghostHouseStates = new Map();
 const gameCameraState = {
   forward: new THREE.Vector3(1, 0, 0),
   reverseHoldForward: new THREE.Vector3(1, 0, 0),
@@ -339,6 +340,7 @@ const POWER_PELLET_MAX_FLASH_DURATION = 4.0;
 const GHOST_RESPAWN_DELAY = 1.25;
 const GHOST_NORMAL_SPEED = 12.5;
 const GHOST_VULNERABLE_SPEED = 8.0;
+const BLINKY_RELEASE_DELAY = 0;
 const GHOST_SCORE_CHAIN = [200, 400, 800, 1600];
 const ghostAI = new GhostAIController();
 
@@ -512,6 +514,106 @@ function updateGhostMovementSpeed() {
     : GHOST_NORMAL_SPEED;
 }
 
+function getGhostHouseState(ghost = gameGhost) {
+  if (!ghost) return null;
+
+  if (!ghostHouseStates.has(ghost)) {
+    ghostHouseStates.set(ghost, {
+      houseState: 'active',
+      releaseTimer: 0,
+      releaseDirection: null
+    });
+  }
+
+  return ghostHouseStates.get(ghost);
+}
+
+function initializeGhostHouseState(ghost = gameGhost, releaseDelay = BLINKY_RELEASE_DELAY) {
+  const state = getGhostHouseState(ghost);
+  if (!state) return;
+
+  state.houseState = ghostSpawnState?.tile?.type === 'ghostchamber' ? 'inside' : 'active';
+  state.releaseTimer = releaseDelay;
+  state.releaseDirection = ghostSpawnState?.direction || null;
+}
+
+function isGhostInsideHouse(ghost = gameGhost) {
+  const state = getGhostHouseState(ghost);
+  return Boolean(state && state.houseState !== 'active');
+}
+
+function prepareGhostHouseRelease(ghost = gameGhost, releaseDelay = BLINKY_RELEASE_DELAY) {
+  const state = getGhostHouseState(ghost);
+  if (!state || !isGhostControllerInHouse(ghostController)) return;
+
+  state.houseState = 'inside';
+  state.releaseTimer = releaseDelay;
+  state.releaseDirection = ghostSpawnState?.direction || ghostController?.currentDirection || null;
+  ghostAI.reset();
+}
+
+function isGhostControllerInHouse(controller = ghostController) {
+  if (!controller) return false;
+
+  return (
+    controller.currentNode?.tile?.type === 'ghostchamber'
+    || controller.activeEdge?.from?.tile?.type === 'ghostchamber'
+    || controller.activeEdge?.to?.tile?.type === 'ghostchamber'
+  );
+}
+
+function isGhostControllerAtHouseNode(controller = ghostController) {
+  return Boolean(controller?.currentNode?.tile?.type === 'ghostchamber' && !controller.route);
+}
+
+function isGhostApproachingHouseExit(controller = ghostController) {
+  if (!controller?.route || !controller.activeEdge) return false;
+
+  return (
+    controller.activeEdge.from?.tile?.type === 'ghostchamber'
+    && controller.activeEdge.to?.tile?.type !== 'ghostchamber'
+    && controller.route.totalLength - controller.route.progress <= 4.5
+  );
+}
+
+function shouldSuppressGhostCollision() {
+  if (isGhostRespawning()) return true;
+  if (isGhostControllerAtHouseNode(ghostController)) return true;
+  if (!isGhostControllerInHouse(ghostController)) return false;
+
+  return !isGhostApproachingHouseExit(ghostController);
+}
+
+function updateGhostHouseState(deltaTime) {
+  if (!ghostAI.enabled) return;
+
+  const state = getGhostHouseState(gameGhost);
+  if (!state || state.houseState === 'active' || isGhostRespawning()) return;
+
+  if (state.houseState === 'inside') {
+    state.releaseTimer = Math.max(0, state.releaseTimer - deltaTime);
+    if (state.releaseTimer === 0) {
+      state.houseState = 'releasing';
+      ghostController.setDesiredDirection(state.releaseDirection);
+      ghostController.desiredDirection = null;
+      ghostController.desiredIntent = null;
+      ghostAI.reset();
+    }
+    return;
+  }
+
+  if (state.houseState === 'releasing') {
+    if (!isGhostControllerInHouse(ghostController) || isGhostApproachingHouseExit(ghostController)) {
+      state.houseState = 'active';
+      ghostAI.reset();
+    } else if (!ghostController.isMoving && state.releaseDirection) {
+      ghostController.setDesiredDirection(state.releaseDirection);
+      ghostController.desiredDirection = null;
+      ghostController.desiredIntent = null;
+    }
+  }
+}
+
 function startPowerPelletState() {
   activePowerPelletDuration = getPowerPelletDuration();
   powerPelletTimer = activePowerPelletDuration;
@@ -565,6 +667,7 @@ function resetGhostToSpawn() {
   if (!ghostController || !ghostSpawnState) return;
 
   ghostController.reset(ghostSpawnState.tile, ghostSpawnState.direction, ghostSpawnState.connector);
+  initializeGhostHouseState(gameGhost, BLINKY_RELEASE_DELAY);
   gameGhost.visible = true;
   applyPowerVisualsToGhosts();
 }
@@ -591,6 +694,12 @@ function updateGhostRespawn(deltaTime) {
 }
 
 function updateGhostAi() {
+  if (ghostAI.enabled && isGhostControllerAtHouseNode(ghostController) && !isGhostInsideHouse(gameGhost)) {
+    prepareGhostHouseRelease(gameGhost, BLINKY_RELEASE_DELAY);
+  }
+
+  if (isGhostInsideHouse(gameGhost)) return;
+
   ghostAI.update({
     ghostController,
     pacman: gamePacman,
@@ -736,7 +845,9 @@ function buildGameMaze() {
 
   ghostController = new EntityController(gameGhost, currentGraph, { speed: GHOST_NORMAL_SPEED });
   ghostPowerStates.clear();
+  ghostHouseStates.clear();
   getGhostPowerState(gameGhost);
+  getGhostHouseState(gameGhost);
   ghostRespawnTimer = 0;
   ghostAI.reset();
   clearPowerPelletState();
@@ -803,6 +914,7 @@ function buildGameMaze() {
 
   if (ghostSpawnState) {
     ghostController.reset(ghostSpawnState.tile, ghostSpawnState.direction, ghostSpawnState.connector);
+    initializeGhostHouseState(gameGhost, BLINKY_RELEASE_DELAY);
   }
 
   pelletManager.buildFromMap(currentGraph);
@@ -813,6 +925,7 @@ function resetGameCharactersToSpawn(snapCamera = true) {
 
   pacmanController.reset(pacmanSpawnState.tile, pacmanSpawnState.direction, pacmanSpawnState.connector);
   ghostController.reset(ghostSpawnState.tile, ghostSpawnState.direction, ghostSpawnState.connector);
+  initializeGhostHouseState(gameGhost, BLINKY_RELEASE_DELAY);
   ghostRespawnTimer = 0;
   if (gameGhost) gameGhost.visible = true;
 
@@ -1394,7 +1507,11 @@ document.querySelector('#btn-toggle-ghost-ai').addEventListener('click', (e) => 
   e.target.blur();
   if (!isGameMode) return;
 
-  ghostAI.setEnabled(!ghostAI.enabled);
+  const nextEnabled = !ghostAI.enabled;
+  ghostAI.setEnabled(nextEnabled);
+  if (nextEnabled) {
+    prepareGhostHouseRelease(gameGhost, BLINKY_RELEASE_DELAY);
+  }
   updateGhostAiButton();
 });
 
@@ -2412,6 +2529,7 @@ function animate() {
       }
     } else {
       if (pacmanController) pacmanController.update(deltaTime, elapsedTime);
+      updateGhostHouseState(deltaTime);
       updateGhostAi();
       if (ghostController && !isGhostRespawning()) {
         ghostController.update(deltaTime, elapsedTime);
@@ -2456,7 +2574,12 @@ function animate() {
         }
       }
 
-      if (!isLevelComplete && areCaptureCollisionsEnabled && !isGhostRespawning() && isPacmanCaptured()) {
+      if (
+        !isLevelComplete
+        && areCaptureCollisionsEnabled
+        && !shouldSuppressGhostCollision()
+        && isPacmanCaptured()
+      ) {
         if (canGhostBeEaten(gameGhost)) {
           startGhostRespawnDelay();
         } else {
