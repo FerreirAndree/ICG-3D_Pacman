@@ -296,6 +296,11 @@ let livesRemaining = 3;
 let isGameOver = false;
 let score = 0;
 let powerPelletTimer = 0;
+let activePowerPelletDuration = 0;
+let ghostsEatenThisPower = 0;
+let ghostRespawnTimer = 0;
+let currentGameGraph = null;
+const ghostPowerStates = new Map();
 const gameCameraState = {
   forward: new THREE.Vector3(1, 0, 0),
   reverseHoldForward: new THREE.Vector3(1, 0, 0),
@@ -321,10 +326,15 @@ const PACMAN_CAPTURE_RESOLVE_DURATION = 1.0;
 const STARTING_LIVES = 3;
 const STANDARD_PELLET_SCORE = 10;
 const POWER_PELLET_SCORE = 50;
-const POWER_PELLET_DURATION = 8.0;
+const POWER_PELLET_BASE_DURATION = 6.0;
+const POWER_PELLET_DURATION_PER_TILE = 0.12;
+const POWER_PELLET_MIN_DURATION = 7.0;
+const POWER_PELLET_MAX_DURATION = 18.0;
 const POWER_PELLET_FLASH_RATIO = 0.25;
 const POWER_PELLET_MIN_FLASH_DURATION = 1.5;
 const POWER_PELLET_MAX_FLASH_DURATION = 4.0;
+const GHOST_RESPAWN_DELAY = 1.25;
+const GHOST_SCORE_CHAIN = [200, 400, 800, 1600];
 
 function rotateFlatVectorToward(current, desired, maxRadians) {
   const from = current.clone().setY(0).normalize();
@@ -410,13 +420,27 @@ function addPelletScore(eatenPellets) {
   updateScoreUi();
 }
 
-function setGhostVulnerableVisual(isVulnerable) {
-  if (gameGhost?.setVulnerable) {
-    gameGhost.setVulnerable(isVulnerable);
-  }
+function getNextGhostScore() {
+  const scoreIndex = Math.min(ghostsEatenThisPower, GHOST_SCORE_CHAIN.length - 1);
+  return GHOST_SCORE_CHAIN[scoreIndex];
 }
 
-function getPowerPelletFlashDuration(powerDuration = POWER_PELLET_DURATION) {
+function addGhostScore() {
+  score += getNextGhostScore();
+  ghostsEatenThisPower += 1;
+  updateScoreUi();
+}
+
+function getPowerPelletDuration() {
+  const tileCount = currentGameGraph?.tiles?.size ?? 0;
+  return THREE.MathUtils.clamp(
+    POWER_PELLET_BASE_DURATION + tileCount * POWER_PELLET_DURATION_PER_TILE,
+    POWER_PELLET_MIN_DURATION,
+    POWER_PELLET_MAX_DURATION
+  );
+}
+
+function getPowerPelletFlashDuration(powerDuration = activePowerPelletDuration || getPowerPelletDuration()) {
   return THREE.MathUtils.clamp(
     powerDuration * POWER_PELLET_FLASH_RATIO,
     POWER_PELLET_MIN_FLASH_DURATION,
@@ -424,14 +448,61 @@ function getPowerPelletFlashDuration(powerDuration = POWER_PELLET_DURATION) {
   );
 }
 
+function getGhostPowerState(ghost = gameGhost) {
+  if (!ghost) return null;
+
+  if (!ghostPowerStates.has(ghost)) {
+    ghostPowerStates.set(ghost, {
+      eatenDuringCurrentPower: false
+    });
+  }
+
+  return ghostPowerStates.get(ghost);
+}
+
+function setGhostVulnerableVisual(ghost, state) {
+  if (ghost?.setVulnerable) {
+    ghost.setVulnerable(state);
+  }
+}
+
+function canGhostBeEaten(ghost = gameGhost) {
+  const state = getGhostPowerState(ghost);
+  return Boolean(isPowerPelletActive() && state && !state.eatenDuringCurrentPower);
+}
+
+function getActivePowerVisualState() {
+  if (!isPowerPelletActive()) return false;
+  return powerPelletTimer <= getPowerPelletFlashDuration() ? 'flashing' : true;
+}
+
+function applyPowerVisualsToGhosts() {
+  if (!gameGhost) return;
+
+  setGhostVulnerableVisual(
+    gameGhost,
+    canGhostBeEaten(gameGhost) ? getActivePowerVisualState() : false
+  );
+}
+
 function startPowerPelletState() {
-  powerPelletTimer = POWER_PELLET_DURATION;
-  setGhostVulnerableVisual(true);
+  activePowerPelletDuration = getPowerPelletDuration();
+  powerPelletTimer = activePowerPelletDuration;
+  ghostsEatenThisPower = 0;
+  ghostPowerStates.forEach((state) => {
+    state.eatenDuringCurrentPower = false;
+  });
+  applyPowerVisualsToGhosts();
 }
 
 function clearPowerPelletState() {
   powerPelletTimer = 0;
-  setGhostVulnerableVisual(false);
+  activePowerPelletDuration = 0;
+  ghostsEatenThisPower = 0;
+  ghostPowerStates.forEach((state) => {
+    state.eatenDuringCurrentPower = false;
+  });
+  applyPowerVisualsToGhosts();
 }
 
 function updatePowerPelletState(deltaTime) {
@@ -439,14 +510,53 @@ function updatePowerPelletState(deltaTime) {
 
   powerPelletTimer = Math.max(0, powerPelletTimer - deltaTime);
   if (powerPelletTimer === 0) {
-    setGhostVulnerableVisual(false);
-  } else if (powerPelletTimer <= getPowerPelletFlashDuration()) {
-    setGhostVulnerableVisual('flashing');
+    activePowerPelletDuration = 0;
+    ghostsEatenThisPower = 0;
+    ghostPowerStates.forEach((state) => {
+      state.eatenDuringCurrentPower = false;
+    });
   }
+  applyPowerVisualsToGhosts();
 }
 
 function didEatPowerPellet(eatenPellets) {
   return eatenPellets.some((pellet) => pellet.type === PELLET_TYPES.POWER);
+}
+
+function isPowerPelletActive() {
+  return powerPelletTimer > 0;
+}
+
+function isGhostRespawning() {
+  return ghostRespawnTimer > 0;
+}
+
+function resetGhostToSpawn() {
+  if (!ghostController || !ghostSpawnState) return;
+
+  ghostController.reset(ghostSpawnState.tile, ghostSpawnState.direction, ghostSpawnState.connector);
+  gameGhost.visible = true;
+  applyPowerVisualsToGhosts();
+}
+
+function startGhostRespawnDelay() {
+  if (!gameGhost || isGhostRespawning()) return;
+
+  const state = getGhostPowerState(gameGhost);
+  if (state) state.eatenDuringCurrentPower = true;
+  addGhostScore();
+  setGhostVulnerableVisual(gameGhost, false);
+  ghostRespawnTimer = GHOST_RESPAWN_DELAY;
+  gameGhost.visible = false;
+}
+
+function updateGhostRespawn(deltaTime) {
+  if (!isGhostRespawning()) return;
+
+  ghostRespawnTimer = Math.max(0, ghostRespawnTimer - deltaTime);
+  if (!isGhostRespawning()) {
+    resetGhostToSpawn();
+  }
 }
 
 function asMaterialList(material) {
@@ -570,6 +680,7 @@ function buildGameMaze() {
   }));
   
   const currentGraph = buildMazeGraph(gamePiecesForGraph);
+  currentGameGraph = currentGraph;
 
   gamePacman = createPacman();
   gamePacman.scale.setScalar(0.32);
@@ -583,6 +694,9 @@ function buildGameMaze() {
   gameMaze.add(gameGhost);
 
   ghostController = new EntityController(gameGhost, currentGraph, { speed: 12.5 });
+  ghostPowerStates.clear();
+  getGhostPowerState(gameGhost);
+  ghostRespawnTimer = 0;
   clearPowerPelletState();
   
   activeController = pacmanController;
@@ -657,6 +771,8 @@ function resetGameCharactersToSpawn(snapCamera = true) {
 
   pacmanController.reset(pacmanSpawnState.tile, pacmanSpawnState.direction, pacmanSpawnState.connector);
   ghostController.reset(ghostSpawnState.tile, ghostSpawnState.direction, ghostSpawnState.connector);
+  ghostRespawnTimer = 0;
+  if (gameGhost) gameGhost.visible = true;
 
   isGameLookBackActive = false;
   previousGameLookBackState = false;
@@ -714,6 +830,7 @@ function restartGameRun() {
   isGameOver = false;
   score = 0;
   captureResolveTimer = 0;
+  ghostRespawnTimer = 0;
   clearPowerPelletState();
   pelletManager.reset();
   document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
@@ -907,6 +1024,8 @@ function enterGameMode() {
   areCaptureCollisionsEnabled = true;
   captureResolveTimer = 0;
   powerPelletTimer = 0;
+  activePowerPelletDuration = 0;
+  ghostRespawnTimer = 0;
   livesRemaining = STARTING_LIVES;
   isGameOver = false;
   score = 0;
@@ -958,6 +1077,7 @@ function exitGameMode() {
   previousGameLookBackState = false;
   isJumpscareMode = false;
   captureResolveTimer = 0;
+  ghostRespawnTimer = 0;
   clearPowerPelletState();
   isGameOver = false;
   appContainer.classList.remove('game-active');
@@ -2205,18 +2325,20 @@ function animate() {
   if (isGameMode && activeController) {
     if (isGameOver) {
       if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime);
-      if (gameGhost?.userData.update) gameGhost.userData.update(elapsedTime);
+      if (gameGhost?.visible && gameGhost.userData.update) gameGhost.userData.update(elapsedTime);
       pelletManager.update(elapsedTime);
       updatePowerPelletState(deltaTime);
+      updateGhostRespawn(deltaTime);
       updateGameCamera(deltaTime, false);
     } else if (isCaptureResolving()) {
       captureResolveTimer = Math.max(0, captureResolveTimer - deltaTime);
 
       if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime);
-      if (gameGhost?.userData.update) gameGhost.userData.update(elapsedTime);
+      if (gameGhost?.visible && gameGhost.userData.update) gameGhost.userData.update(elapsedTime);
 
       pelletManager.update(elapsedTime);
       updatePowerPelletState(deltaTime);
+      updateGhostRespawn(deltaTime);
       updateGameCamera(deltaTime, false);
 
       if (!isCaptureResolving()) {
@@ -2224,7 +2346,12 @@ function animate() {
       }
     } else {
       if (pacmanController) pacmanController.update(deltaTime, elapsedTime);
-      if (ghostController) ghostController.update(deltaTime, elapsedTime);
+      if (ghostController && !isGhostRespawning()) {
+        ghostController.update(deltaTime, elapsedTime);
+      } else if (gameGhost?.visible && gameGhost.userData.update) {
+        gameGhost.userData.update(elapsedTime);
+      }
+      updateGhostRespawn(deltaTime);
 
       let forceSnap = false;
       let startedIntent = activeController.consumeStartedIntent();
@@ -2259,8 +2386,12 @@ function animate() {
         document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
       }
 
-      if (areCaptureCollisionsEnabled && isPacmanCaptured()) {
-        startPacmanCaptureResolve();
+      if (areCaptureCollisionsEnabled && !isGhostRespawning() && isPacmanCaptured()) {
+        if (canGhostBeEaten(gameGhost)) {
+          startGhostRespawnDelay();
+        } else {
+          startPacmanCaptureResolve();
+        }
       }
     }
   }
