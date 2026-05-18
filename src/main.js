@@ -294,6 +294,7 @@ let areCaptureCollisionsEnabled = true;
 let captureResolveTimer = 0;
 let livesRemaining = 3;
 let isGameOver = false;
+let isLevelComplete = false;
 let score = 0;
 let powerPelletTimer = 0;
 let activePowerPelletDuration = 0;
@@ -334,6 +335,8 @@ const POWER_PELLET_FLASH_RATIO = 0.25;
 const POWER_PELLET_MIN_FLASH_DURATION = 1.5;
 const POWER_PELLET_MAX_FLASH_DURATION = 4.0;
 const GHOST_RESPAWN_DELAY = 1.25;
+const GHOST_NORMAL_SPEED = 12.5;
+const GHOST_VULNERABLE_SPEED = 8.0;
 const GHOST_SCORE_CHAIN = [200, 400, 800, 1600];
 
 function rotateFlatVectorToward(current, desired, maxRadians) {
@@ -397,7 +400,9 @@ function updateLivesUi() {
   }
 
   if (gameStateLabel) {
-    gameStateLabel.style.display = isGameOver ? 'block' : 'none';
+    gameStateLabel.style.display = (isGameOver || isLevelComplete) ? 'block' : 'none';
+    gameStateLabel.textContent = isLevelComplete ? 'Level Complete' : 'Game Over';
+    gameStateLabel.style.color = isLevelComplete ? '#00ffaa' : '#ff4444';
   }
 }
 
@@ -483,6 +488,15 @@ function applyPowerVisualsToGhosts() {
     gameGhost,
     canGhostBeEaten(gameGhost) ? getActivePowerVisualState() : false
   );
+  updateGhostMovementSpeed();
+}
+
+function updateGhostMovementSpeed() {
+  if (!ghostController) return;
+
+  ghostController.speed = canGhostBeEaten(gameGhost)
+    ? GHOST_VULNERABLE_SPEED
+    : GHOST_NORMAL_SPEED;
 }
 
 function startPowerPelletState() {
@@ -546,6 +560,7 @@ function startGhostRespawnDelay() {
   if (state) state.eatenDuringCurrentPower = true;
   addGhostScore();
   setGhostVulnerableVisual(gameGhost, false);
+  updateGhostMovementSpeed();
   ghostRespawnTimer = GHOST_RESPAWN_DELAY;
   gameGhost.visible = false;
 }
@@ -693,7 +708,7 @@ function buildGameMaze() {
   makeGhostVisibleThroughGlass(gameGhost);
   gameMaze.add(gameGhost);
 
-  ghostController = new EntityController(gameGhost, currentGraph, { speed: 12.5 });
+  ghostController = new EntityController(gameGhost, currentGraph, { speed: GHOST_NORMAL_SPEED });
   ghostPowerStates.clear();
   getGhostPowerState(gameGhost);
   ghostRespawnTimer = 0;
@@ -825,9 +840,16 @@ function finishPacmanCaptureResolve() {
   }
 }
 
+function completeLevel() {
+  isLevelComplete = true;
+  captureResolveTimer = 0;
+  updateLivesUi();
+}
+
 function restartGameRun() {
   livesRemaining = STARTING_LIVES;
   isGameOver = false;
+  isLevelComplete = false;
   score = 0;
   captureResolveTimer = 0;
   ghostRespawnTimer = 0;
@@ -1028,6 +1050,7 @@ function enterGameMode() {
   ghostRespawnTimer = 0;
   livesRemaining = STARTING_LIVES;
   isGameOver = false;
+  isLevelComplete = false;
   score = 0;
   appContainer.classList.add('game-active');
 
@@ -1080,6 +1103,7 @@ function exitGameMode() {
   ghostRespawnTimer = 0;
   clearPowerPelletState();
   isGameOver = false;
+  isLevelComplete = false;
   appContainer.classList.remove('game-active');
 
   const statusTab = document.querySelector('#mode-status');
@@ -1280,6 +1304,8 @@ document.querySelector('#btn-toggle-game').addEventListener('click', toggleGameM
 document.querySelector('#btn-reset-pellets').addEventListener('click', () => {
   if (pelletManager) {
     pelletManager.reset();
+    isLevelComplete = false;
+    updateLivesUi();
     document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
   }
 });
@@ -1562,7 +1588,7 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (isGameMode) {
-    if (isGameOver) {
+    if (isGameOver || isLevelComplete) {
       if (key === 'escape') {
         exitGameMode();
       }
@@ -2323,7 +2349,7 @@ function animate() {
   }
 
   if (isGameMode && activeController) {
-    if (isGameOver) {
+    if (isGameOver || isLevelComplete) {
       if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime);
       if (gameGhost?.visible && gameGhost.userData.update) gameGhost.userData.update(elapsedTime);
       pelletManager.update(elapsedTime);
@@ -2384,9 +2410,12 @@ function animate() {
           startPowerPelletState();
         }
         document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
+        if (pelletManager.getTotalCount() > 0 && pelletManager.getEatenCount() >= pelletManager.getTotalCount()) {
+          completeLevel();
+        }
       }
 
-      if (areCaptureCollisionsEnabled && !isGhostRespawning() && isPacmanCaptured()) {
+      if (!isLevelComplete && areCaptureCollisionsEnabled && !isGhostRespawning() && isPacmanCaptured()) {
         if (canGhostBeEaten(gameGhost)) {
           startGhostRespawnDelay();
         } else {
