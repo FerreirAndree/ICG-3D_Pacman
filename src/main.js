@@ -82,7 +82,7 @@ const uiHtml = `
           <button class="btn" id="btn-reset-pellets" style="flex: 1; padding: 6px;">Reset Pellets</button>
           <button class="btn" id="btn-reset-run" style="flex: 1; padding: 6px;">Restart Run</button>
         </div>
-        <button class="btn" id="btn-swap-puppet" style="margin-top: -5px; padding: 6px; background: rgba(255, 0, 68, 0.2); border-color: rgba(255, 0, 68, 0.3); color: #ff0044;">Control: Pacman</button>
+        <button class="btn" id="btn-swap-puppet" style="margin-top: -5px; padding: 6px; background: rgba(255, 204, 0, 0.2); border-color: rgba(255, 204, 0, 0.3); color: #ffcc00;">Control: Pacman</button>
         <button class="btn" id="btn-toggle-ghost-ai" style="margin-top: -5px; padding: 6px;">Ghost AI: Off</button>
         <button class="btn" id="btn-toggle-collisions" style="margin-top: -5px; padding: 6px;">Collisions: On</button>
         <button class="btn" id="btn-toggle-jumpscare" style="margin-top: -5px; padding: 6px;">Jumpscare: Off</button>
@@ -340,9 +340,22 @@ const GHOST_SCORE_CHAIN = [200, 400, 800, 1600];
 const GHOST_DEFINITIONS = [
   {
     id: 'blinky',
+    label: 'Blinky',
     color: 0xff0044,
+    uiColor: '#ff0044',
+    uiRgb: '255, 0, 68',
     spawnConnector: 'center_back',
     releaseDelay: BLINKY_RELEASE_DELAY,
+    aiProfile: 'direct'
+  },
+  {
+    id: 'pinky',
+    label: 'Pinky',
+    color: 0xff44bb,
+    uiColor: '#ff44bb',
+    uiRgb: '255, 68, 187',
+    spawnConnector: 'left_back',
+    releaseDelay: 0,
     aiProfile: 'direct'
   }
 ];
@@ -355,8 +368,13 @@ function getPrimaryGhostController() {
   return getPrimaryGhostEntry()?.controller || null;
 }
 
+function getGhostEntryById(id) {
+  return gameGhosts.find((entry) => entry.id === id) || null;
+}
+
 function resolveGhostEntry(ghostOrEntry = getPrimaryGhostEntry()) {
   if (!ghostOrEntry) return null;
+  if (typeof ghostOrEntry === 'string') return getGhostEntryById(ghostOrEntry);
   if (gameGhosts.includes(ghostOrEntry)) return ghostOrEntry;
 
   return gameGhosts.find((entry) => (
@@ -372,6 +390,45 @@ function forEachGhost(callback) {
 
 function isGhostAiEnabled() {
   return Boolean(gameGhosts.some((entry) => entry.ai.enabled));
+}
+
+function getActivePuppetController() {
+  if (activePuppet === 'pacman') return pacmanController;
+  return getGhostEntryById(activePuppet)?.controller || getPrimaryGhostController();
+}
+
+function updateSwapPuppetButton() {
+  const btn = document.querySelector('#btn-swap-puppet');
+  if (!btn) return;
+
+  const ghostEntry = getGhostEntryById(activePuppet);
+
+  if (!ghostEntry) {
+    btn.textContent = 'Control: Pacman';
+    btn.style.background = 'rgba(255, 204, 0, 0.2)';
+    btn.style.borderColor = 'rgba(255, 204, 0, 0.3)';
+    btn.style.color = '#ffcc00';
+    return;
+  }
+
+  btn.textContent = `Control: ${ghostEntry.definition.label}`;
+  btn.style.background = `rgba(${ghostEntry.definition.uiRgb}, 0.2)`;
+  btn.style.borderColor = `rgba(${ghostEntry.definition.uiRgb}, 0.3)`;
+  btn.style.color = ghostEntry.definition.uiColor;
+}
+
+function cycleActivePuppet() {
+  if (activePuppet === 'pacman') {
+    activePuppet = getPrimaryGhostEntry()?.id || 'pacman';
+  } else {
+    const currentIndex = gameGhosts.findIndex((entry) => entry.id === activePuppet);
+    activePuppet = currentIndex >= 0 && currentIndex < gameGhosts.length - 1
+      ? gameGhosts[currentIndex + 1].id
+      : 'pacman';
+  }
+
+  activeController = getActivePuppetController();
+  updateSwapPuppetButton();
 }
 
 function rotateFlatVectorToward(current, desired, maxRadians) {
@@ -510,6 +567,9 @@ function setGhostVulnerableVisual(ghost, state) {
 }
 
 function canGhostBeEaten(ghostOrEntry = getPrimaryGhostEntry()) {
+  const entry = resolveGhostEntry(ghostOrEntry);
+  if (entry?.powerState.recoveringFromEaten) return false;
+
   const state = getGhostPowerState(ghostOrEntry);
   return Boolean(isPowerPelletActive() && state && !state.eatenDuringCurrentPower);
 }
@@ -548,7 +608,9 @@ function initializeGhostHouseState(ghostOrEntry = getPrimaryGhostEntry()) {
   if (!entry) return;
 
   entry.houseState.houseState = entry.spawnState?.tile?.type === 'ghostchamber' ? 'inside' : 'active';
-  entry.houseState.releaseTimer = entry.definition.releaseDelay;
+  entry.houseState.releaseTimer = entry.powerState.recoveringFromEaten
+    ? 0
+    : entry.definition.releaseDelay;
   entry.houseState.releaseDirection = entry.spawnState?.direction || null;
 }
 
@@ -604,6 +666,8 @@ function shouldSuppressGhostCollision(ghostOrEntry = getPrimaryGhostEntry()) {
 
 function updateGhostHouseState(deltaTime) {
   forEachGhost((entry) => {
+    updateGhostEatenRecoveryState(entry);
+
     if (!entry.ai.enabled) return;
 
     const state = getGhostHouseState(entry);
@@ -624,6 +688,7 @@ function updateGhostHouseState(deltaTime) {
     if (state.houseState === 'releasing') {
       if (!isGhostControllerInHouse(entry.controller) || isGhostApproachingHouseExit(entry.controller)) {
         state.houseState = 'active';
+        updateGhostEatenRecoveryState(entry);
         entry.ai.reset();
       } else if (!entry.controller.isMoving && state.releaseDirection) {
         entry.controller.setDesiredDirection(state.releaseDirection);
@@ -639,7 +704,10 @@ function startPowerPelletState() {
   powerPelletTimer = activePowerPelletDuration;
   ghostsEatenThisPower = 0;
   forEachGhost((entry) => {
-    entry.powerState.eatenDuringCurrentPower = false;
+    entry.powerState.eatenDuringCurrentPower = (
+      isGhostRespawning(entry)
+      || entry.powerState.recoveringFromEaten
+    );
   });
   applyPowerVisualsToGhosts();
   forEachGhost((entry) => {
@@ -685,6 +753,14 @@ function isGhostRespawning(ghostOrEntry = getPrimaryGhostEntry()) {
   return (resolveGhostEntry(ghostOrEntry)?.respawnTimer || 0) > 0;
 }
 
+function updateGhostEatenRecoveryState(ghostOrEntry = getPrimaryGhostEntry()) {
+  const entry = resolveGhostEntry(ghostOrEntry);
+  if (!entry?.powerState.recoveringFromEaten) return;
+  if (isGhostRespawning(entry) || isGhostControllerInHouse(entry.controller)) return;
+
+  entry.powerState.recoveringFromEaten = false;
+}
+
 function resetGhostToSpawn(ghostOrEntry = getPrimaryGhostEntry()) {
   const entry = resolveGhostEntry(ghostOrEntry);
   if (!entry?.controller || !entry.spawnState) return;
@@ -701,6 +777,7 @@ function startGhostRespawnDelay(ghostOrEntry = getPrimaryGhostEntry()) {
 
   const state = getGhostPowerState(entry);
   if (state) state.eatenDuringCurrentPower = true;
+  if (state) state.recoveringFromEaten = true;
   addGhostScore();
   setGhostVulnerableVisual(entry.model, false);
   updateGhostMovementSpeed(entry);
@@ -838,7 +915,8 @@ function createGameGhostEntry(definition, graph) {
     controller: new EntityController(model, graph, { speed: GHOST_NORMAL_SPEED }),
     ai: new GhostAIController(),
     powerState: {
-      eatenDuringCurrentPower: false
+      eatenDuringCurrentPower: false,
+      recoveringFromEaten: false
     },
     houseState: {
       houseState: 'active',
@@ -906,8 +984,7 @@ function buildGameMaze() {
   
   activeController = pacmanController;
   activePuppet = 'pacman';
-  const swapBtn = document.querySelector('#btn-swap-puppet');
-  if (swapBtn) swapBtn.textContent = 'Control: Pacman';
+  updateSwapPuppetButton();
   
   // Find a suitable spawn point for Pacman
   let spawnTile = null;
@@ -991,6 +1068,8 @@ function resetGameCharactersToSpawn(snapCamera = true) {
     entry.respawnTimer = 0;
     entry.model.visible = true;
     entry.ai.reset();
+    entry.powerState.eatenDuringCurrentPower = false;
+    entry.powerState.recoveringFromEaten = false;
   });
 
   isGameLookBackActive = false;
@@ -999,7 +1078,7 @@ function resetGameCharactersToSpawn(snapCamera = true) {
   gameCameraState.reversalTimer = 0;
   gameCameraState.reverseSnapFramesRemaining = 0;
 
-  activeController = activePuppet === 'ghost' ? getPrimaryGhostController() : pacmanController;
+  activeController = getActivePuppetController();
 
   if (snapCamera && activeController) {
     gameCameraState.forward.copy(activeController.getFollowDirection()).normalize();
@@ -1536,21 +1615,7 @@ document.querySelector('#btn-reset-run').addEventListener('click', () => {
 document.querySelector('#btn-swap-puppet').addEventListener('click', (e) => {
   e.target.blur();
   if (!isGameMode) return;
-  if (activePuppet === 'pacman') {
-    activePuppet = 'ghost';
-    activeController = getPrimaryGhostController();
-    e.target.textContent = 'Control: Ghost';
-    e.target.style.background = 'rgba(255, 68, 187, 0.2)';
-    e.target.style.borderColor = 'rgba(255, 68, 187, 0.3)';
-    e.target.style.color = '#ff44bb';
-  } else {
-    activePuppet = 'pacman';
-    activeController = pacmanController;
-    e.target.textContent = 'Control: Pacman';
-    e.target.style.background = 'rgba(255, 204, 0, 0.2)';
-    e.target.style.borderColor = 'rgba(255, 204, 0, 0.3)';
-    e.target.style.color = '#ffcc00';
-  }
+  cycleActivePuppet();
   
   gameCameraState.forward.copy(activeController.getFollowDirection());
   gameCameraState.reverseHoldForward.copy(gameCameraState.forward);
