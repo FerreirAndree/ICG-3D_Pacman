@@ -1030,7 +1030,7 @@ function createGameGhostEntry(definition, graph) {
     definition,
     model,
     controller: new EntityController(model, graph, { speed: GHOST_NORMAL_SPEED }),
-    ai: new GhostAIController(),
+    ai: new GhostAIController({ profile: definition.aiProfile }),
     powerState: {
       eatenDuringCurrentPower: false,
       recoveringFromEaten: false

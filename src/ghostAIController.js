@@ -1,12 +1,19 @@
 import { OPPOSITE_DIRECTIONS } from './mazeGraph.js';
 
 const DEFAULT_DECISION_LEAD_DISTANCE = 4.5;
+const DEFAULT_AI_PROFILE = 'direct';
 
 export class GhostAIController {
   constructor(options = {}) {
     this.enabled = false;
+    this.profile = options.profile ?? DEFAULT_AI_PROFILE;
     this.lastDecisionNodeId = null;
     this.decisionLeadDistance = options.decisionLeadDistance ?? DEFAULT_DECISION_LEAD_DISTANCE;
+  }
+
+  setProfile(profile = DEFAULT_AI_PROFILE) {
+    this.profile = profile;
+    this.lastDecisionNodeId = null;
   }
 
   setEnabled(enabled) {
@@ -35,16 +42,30 @@ export class GhostAIController {
     const context = this.getDecisionContext(ghostController);
     if (!context?.node || this.lastDecisionNodeId === context.node.id) return;
 
+    const targetPosition = this.getTargetPosition({
+      pacman,
+      ghost,
+      ghostController,
+      fleeing: canGhostBeEaten(ghost)
+    });
     const edge = this.chooseEdge({
       decisionNode: context.node,
       incomingDirection: context.incomingDirection,
-      pacmanPosition: pacman.position,
+      targetPosition,
       fleeing: canGhostBeEaten(ghost)
     });
     if (!edge) return;
 
     ghostController.setDesiredDirection(edge.inputDirection);
     this.lastDecisionNodeId = context.node.id;
+  }
+
+  getTargetPosition({ pacman }) {
+    if (this.profile === 'direct') {
+      return pacman.position;
+    }
+
+    return pacman.position;
   }
 
   getDecisionContext(ghostController) {
@@ -68,8 +89,8 @@ export class GhostAIController {
     };
   }
 
-  chooseEdge({ decisionNode, incomingDirection, pacmanPosition, fleeing }) {
-    if (!decisionNode?.edges?.length || !pacmanPosition) return null;
+  chooseEdge({ decisionNode, incomingDirection, targetPosition, fleeing }) {
+    if (!decisionNode?.edges?.length || !targetPosition) return null;
 
     const reverseDirection = incomingDirection ? OPPOSITE_DIRECTIONS[incomingDirection] : null;
     let candidates = decisionNode.edges;
@@ -83,7 +104,7 @@ export class GhostAIController {
     }
 
     return candidates.reduce((best, edge) => {
-      const distanceSq = edge.to.position.distanceToSquared(pacmanPosition);
+      const distanceSq = edge.to.position.distanceToSquared(targetPosition);
       if (!best) return { edge, distanceSq };
 
       return fleeing
