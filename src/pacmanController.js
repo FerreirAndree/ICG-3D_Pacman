@@ -705,7 +705,7 @@ export class EntityController {
       const isCornerTurn = this.activeEdge.from.connector && this.activeEdge.from.connector !== this.activeEdge.inputDirection;
       const behindDir = isCornerTurn ? this.activeEdge.from.connector : OPPOSITE_DIRECTIONS[this.activeEdge.inputDirection];
       
-      if (behindDir) {
+      if (DIRECTIONS[behindDir]) {
         const farBehindPoint = this.activeEdge.points[0].clone().addScaledVector(getDirectionVector(behindDir), 20);
         this.cameraTrail.push(farBehindPoint);
       }

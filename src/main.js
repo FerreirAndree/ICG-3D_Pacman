@@ -83,6 +83,7 @@ const uiHtml = `
           <button class="btn" id="btn-reset-run" style="flex: 1; padding: 6px;">Restart Run</button>
         </div>
         <button class="btn" id="btn-swap-puppet" style="margin-top: -5px; padding: 6px; background: rgba(255, 204, 0, 0.2); border-color: rgba(255, 204, 0, 0.3); color: #ffcc00;">Control: Pacman</button>
+        <button class="btn" id="btn-cycle-ghost-count" style="margin-top: -5px; padding: 6px;">Ghosts: 4</button>
         <button class="btn" id="btn-toggle-ghost-ai" style="margin-top: -5px; padding: 6px;">Ghost AI: Off</button>
         <button class="btn" id="btn-toggle-collisions" style="margin-top: -5px; padding: 6px;">Collisions: On</button>
         <button class="btn" id="btn-toggle-jumpscare" style="margin-top: -5px; padding: 6px;">Jumpscare: Off</button>
@@ -299,6 +300,7 @@ let score = 0;
 let powerPelletTimer = 0;
 let activePowerPelletDuration = 0;
 let ghostsEatenThisPower = 0;
+let activeGhostCount = 4;
 let currentGameGraph = null;
 const gameCameraState = {
   forward: new THREE.Vector3(1, 0, 0),
@@ -335,8 +337,25 @@ const POWER_PELLET_MAX_FLASH_DURATION = 4.0;
 const GHOST_RESPAWN_DELAY = 1.25;
 const GHOST_NORMAL_SPEED = 12.5;
 const GHOST_VULNERABLE_SPEED = 8.0;
-const BLINKY_RELEASE_DELAY = 0;
 const GHOST_SCORE_CHAIN = [200, 400, 800, 1600];
+const DEFAULT_GHOST_SETTINGS = {
+  blinky: {
+    enabled: true,
+    releaseDelay: 0
+  },
+  pinky: {
+    enabled: true,
+    releaseDelay: 3
+  },
+  inky: {
+    enabled: true,
+    releaseDelay: 6
+  },
+  clyde: {
+    enabled: true,
+    releaseDelay: 9
+  }
+};
 const GHOST_DEFINITIONS = [
   {
     id: 'blinky',
@@ -344,8 +363,7 @@ const GHOST_DEFINITIONS = [
     color: 0xff0044,
     uiColor: '#ff0044',
     uiRgb: '255, 0, 68',
-    spawnConnector: 'center_back',
-    releaseDelay: BLINKY_RELEASE_DELAY,
+    spawnConnector: 'center_front',
     aiProfile: 'direct'
   },
   {
@@ -354,11 +372,38 @@ const GHOST_DEFINITIONS = [
     color: 0xff44bb,
     uiColor: '#ff44bb',
     uiRgb: '255, 68, 187',
+    spawnConnector: 'center_back',
+    aiProfile: 'direct'
+  },
+  {
+    id: 'inky',
+    label: 'Inky',
+    color: 0x00ccff,
+    uiColor: '#00ccff',
+    uiRgb: '0, 204, 255',
     spawnConnector: 'left_back',
-    releaseDelay: 0,
+    aiProfile: 'direct'
+  },
+  {
+    id: 'clyde',
+    label: 'Clyde',
+    color: 0xffaa00,
+    uiColor: '#ffaa00',
+    uiRgb: '255, 170, 0',
+    spawnConnector: 'right_back',
     aiProfile: 'direct'
   }
 ];
+
+function getGhostSetting(ghostId, key, fallback = null) {
+  return DEFAULT_GHOST_SETTINGS[ghostId]?.[key] ?? fallback;
+}
+
+function getActiveGhostDefinitions() {
+  return GHOST_DEFINITIONS.slice(0, activeGhostCount).filter((definition) => (
+    getGhostSetting(definition.id, 'enabled', true)
+  ));
+}
 
 function getPrimaryGhostEntry() {
   return gameGhosts[0] || null;
@@ -494,6 +539,13 @@ function updateGhostAiButton() {
   btn.style.color = enabled ? '#00ffaa' : '#ffffff';
 }
 
+function updateGhostCountButton() {
+  const btn = document.querySelector('#btn-cycle-ghost-count');
+  if (!btn) return;
+
+  btn.textContent = `Ghosts: ${activeGhostCount}`;
+}
+
 function updateLivesUi() {
   const livesCounter = document.querySelector('#lives-counter');
   const gameStateLabel = document.querySelector('#game-state-label');
@@ -610,7 +662,7 @@ function initializeGhostHouseState(ghostOrEntry = getPrimaryGhostEntry()) {
   entry.houseState.houseState = entry.spawnState?.tile?.type === 'ghostchamber' ? 'inside' : 'active';
   entry.houseState.releaseTimer = entry.powerState.recoveringFromEaten
     ? 0
-    : entry.definition.releaseDelay;
+    : getGhostSetting(entry.id, 'releaseDelay', 0);
   entry.houseState.releaseDirection = entry.spawnState?.direction || null;
 }
 
@@ -625,9 +677,76 @@ function prepareGhostHouseRelease(ghostOrEntry = getPrimaryGhostEntry()) {
   if (!entry || !state || !isGhostControllerInHouse(entry.controller)) return;
 
   state.houseState = 'inside';
-  state.releaseTimer = entry.definition.releaseDelay;
-  state.releaseDirection = entry.spawnState?.direction || entry.controller.currentDirection || null;
+  state.releaseTimer = getGhostSetting(entry.id, 'releaseDelay', 0);
+  state.releaseDirection = getGhostHouseReleaseDirection(entry) || entry.spawnState?.direction || entry.controller.currentDirection || null;
   entry.ai.reset();
+}
+
+function getGhostHouseReleaseDirection(ghostOrEntry = getPrimaryGhostEntry()) {
+  const entry = resolveGhostEntry(ghostOrEntry);
+  const targetNode = entry?.controller.activeEdge?.to || entry?.controller.currentNode;
+  if (targetNode?.tile?.type !== 'ghostchamber') return null;
+
+  const connectorRoute = {
+    left_back: 'east',
+    right_back: 'west',
+    center_back: 'north',
+    left_front: 'east',
+    right_front: 'west',
+    center_front: 'north'
+  };
+  const localDirection = connectorRoute[targetNode.connector];
+  if (!localDirection) return null;
+
+  return getGraphAbsoluteDirections([localDirection], targetNode.tile.rotation)[0] || null;
+}
+
+function steerGhostThroughHouseRelease(ghostOrEntry = getPrimaryGhostEntry()) {
+  const entry = resolveGhostEntry(ghostOrEntry);
+  const direction = getGhostHouseReleaseDirection(entry);
+  if (!entry || !direction) return;
+
+  entry.houseState.releaseDirection = direction;
+  steerGhostInHouse(entry, direction);
+}
+
+function getGhostHouseWaitingDirection(ghostOrEntry = getPrimaryGhostEntry()) {
+  const entry = resolveGhostEntry(ghostOrEntry);
+  const targetNode = entry?.controller.activeEdge?.to || entry?.controller.currentNode;
+  if (targetNode?.tile?.type !== 'ghostchamber') return null;
+
+  const connectorRoute = {
+    left_back: 'north',
+    center_back: 'north',
+    right_back: 'north',
+    left_front: 'south',
+    center_front: 'south',
+    right_front: 'south'
+  };
+  const localDirection = connectorRoute[targetNode.connector];
+  if (!localDirection) return null;
+
+  return getGraphAbsoluteDirections([localDirection], targetNode.tile.rotation)[0] || null;
+}
+
+function steerGhostThroughHouseWaiting(ghostOrEntry = getPrimaryGhostEntry()) {
+  const entry = resolveGhostEntry(ghostOrEntry);
+  const direction = getGhostHouseWaitingDirection(entry);
+  if (!entry || !direction) return;
+
+  steerGhostInHouse(entry, direction);
+}
+
+function steerGhostInHouse(ghostOrEntry, direction) {
+  const entry = resolveGhostEntry(ghostOrEntry);
+  if (!entry || !direction) return;
+
+  if (entry.controller.isMoving) {
+    entry.controller.desiredDirection = direction;
+  } else {
+    entry.controller.setDesiredDirection(direction);
+  }
+  entry.controller.desiredIntent = null;
 }
 
 function isGhostControllerInHouse(controller = getPrimaryGhostController()) {
@@ -677,10 +796,10 @@ function updateGhostHouseState(deltaTime) {
       state.releaseTimer = Math.max(0, state.releaseTimer - deltaTime);
       if (state.releaseTimer === 0) {
         state.houseState = 'releasing';
-        entry.controller.setDesiredDirection(state.releaseDirection);
-        entry.controller.desiredDirection = null;
-        entry.controller.desiredIntent = null;
+        steerGhostThroughHouseRelease(entry);
         entry.ai.reset();
+      } else {
+        steerGhostThroughHouseWaiting(entry);
       }
       return;
     }
@@ -690,10 +809,8 @@ function updateGhostHouseState(deltaTime) {
         state.houseState = 'active';
         updateGhostEatenRecoveryState(entry);
         entry.ai.reset();
-      } else if (!entry.controller.isMoving && state.releaseDirection) {
-        entry.controller.setDesiredDirection(state.releaseDirection);
-        entry.controller.desiredDirection = null;
-        entry.controller.desiredIntent = null;
+      } else {
+        steerGhostThroughHouseRelease(entry);
       }
     }
   });
@@ -979,7 +1096,7 @@ function buildGameMaze() {
   gameMaze.add(gamePacman);
 
   pacmanController = new EntityController(gamePacman, currentGraph);
-  gameGhosts = GHOST_DEFINITIONS.map((definition) => createGameGhostEntry(definition, currentGraph));
+  gameGhosts = getActiveGhostDefinitions().map((definition) => createGameGhostEntry(definition, currentGraph));
   clearPowerPelletState();
   
   activeController = pacmanController;
@@ -1110,6 +1227,7 @@ function isCaptureResolving() {
 function startPacmanCaptureResolve() {
   if (isCaptureResolving()) return;
 
+  clearPowerPelletState();
   captureResolveTimer = PACMAN_CAPTURE_RESOLVE_DURATION;
   isGameLookBackActive = false;
   previousGameLookBackState = false;
@@ -1149,6 +1267,39 @@ function restartGameRun() {
   updateLivesUi();
   updateScoreUi();
   resetGameCharactersToSpawn(true);
+}
+
+function rebuildGameRun() {
+  const wasGhostAiEnabled = isGhostAiEnabled();
+
+  captureResolveTimer = 0;
+  isGameOver = false;
+  isLevelComplete = false;
+  score = 0;
+  livesRemaining = STARTING_LIVES;
+  clearPowerPelletState();
+  buildGameMaze();
+  forEachGhost((entry) => {
+    entry.ai.setEnabled(wasGhostAiEnabled);
+    if (wasGhostAiEnabled) {
+      prepareGhostHouseRelease(entry);
+    }
+  });
+  document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
+  updateGhostAiButton();
+  updateGhostCountButton();
+  updateLivesUi();
+  updateScoreUi();
+
+  if (activeController) {
+    gameCameraState.forward.copy(activeController.getFollowDirection()).normalize();
+    gameCameraState.reverseHoldForward.copy(gameCameraState.forward);
+    gameCameraState.target.copy(activeController.getCameraTarget());
+    gameCameraState.isReversing = false;
+    gameCameraState.reversalTimer = 0;
+    gameCameraState.reverseSnapFramesRemaining = 0;
+    updateGameCamera(1, true);
+  }
 }
 
 // buildGameMaze(); // We wait for "Start Game" to build it now
@@ -1359,6 +1510,7 @@ function enterGameMode() {
   updateJumpscareButton();
   updateCollisionsButton();
   updateGhostAiButton();
+  updateGhostCountButton();
   updateLivesUi();
   updateScoreUi();
 
@@ -1610,6 +1762,16 @@ document.querySelector('#btn-reset-pellets').addEventListener('click', () => {
 document.querySelector('#btn-reset-run').addEventListener('click', () => {
   if (!isGameMode) return;
   restartGameRun();
+});
+
+document.querySelector('#btn-cycle-ghost-count').addEventListener('click', (e) => {
+  e.target.blur();
+  if (!isGameMode) return;
+
+  activeGhostCount = activeGhostCount >= GHOST_DEFINITIONS.length
+    ? 1
+    : activeGhostCount + 1;
+  rebuildGameRun();
 });
 
 document.querySelector('#btn-swap-puppet').addEventListener('click', (e) => {
