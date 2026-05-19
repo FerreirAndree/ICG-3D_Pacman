@@ -618,6 +618,12 @@ function setGhostVulnerableVisual(ghost, state) {
   }
 }
 
+function setPacmanPowerVisual(state) {
+  if (gamePacman?.setPowerMode) {
+    gamePacman.setPowerMode(state);
+  }
+}
+
 function canGhostBeEaten(ghostOrEntry = getPrimaryGhostEntry()) {
   const entry = resolveGhostEntry(ghostOrEntry);
   if (entry?.powerState.recoveringFromEaten) return false;
@@ -820,6 +826,7 @@ function startPowerPelletState() {
   activePowerPelletDuration = getPowerPelletDuration();
   powerPelletTimer = activePowerPelletDuration;
   ghostsEatenThisPower = 0;
+  setPacmanPowerVisual(true);
   forEachGhost((entry) => {
     entry.powerState.eatenDuringCurrentPower = (
       isGhostRespawning(entry)
@@ -842,6 +849,7 @@ function clearPowerPelletState() {
   powerPelletTimer = 0;
   activePowerPelletDuration = 0;
   ghostsEatenThisPower = 0;
+  setPacmanPowerVisual(false);
   forEachGhost((entry) => {
     entry.powerState.eatenDuringCurrentPower = false;
   });
@@ -855,6 +863,7 @@ function updatePowerPelletState(deltaTime) {
   if (powerPelletTimer === 0) {
     activePowerPelletDuration = 0;
     ghostsEatenThisPower = 0;
+    setPacmanPowerVisual(false);
     forEachGhost((entry) => {
       entry.powerState.eatenDuringCurrentPower = false;
     });

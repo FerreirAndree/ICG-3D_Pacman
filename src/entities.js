@@ -9,91 +9,113 @@
 import * as THREE from 'three';
 
 /**
- * Creates a high-fidelity 'Cyber-Pacman' model with mechanical depth
+ * Creates the main Pacman model using a simple glowing shell and painted eyes.
  */
 export function createPacman() {
   const group = new THREE.Group();
+  const upperGroup = new THREE.Group();
+  const lowerGroup = new THREE.Group();
 
-  // --- Materials ---
+  const radius = 3.5;
   const shellMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffcc00, 
-    metalness: 0.1,
-    roughness: 0.2,
-    transparent: false,
-    opacity: 1.0,
-    depthWrite: true
+    color: 0xffd21a,
+    emissive: 0xffb000,
+    emissiveIntensity: 0.45,
+    roughness: 0.32,
+    metalness: 0.05
   });
+  const upperShellMaterial = shellMaterial.clone();
+  const eyeUniforms = {
+    blink: { value: 1 },
+    power: { value: 0 }
+  };
+  upperShellMaterial.customProgramCacheKey = () => 'showroom-pacman-painted-eyes';
+  upperShellMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.uEyeBlink = eyeUniforms.blink;
+    shader.uniforms.uPowerMode = eyeUniforms.power;
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      `#include <common>
+      varying vec3 vLocalPos;`
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      vLocalPos = position;`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <common>',
+      `#include <common>
+      uniform float uEyeBlink;
+      uniform float uPowerMode;
+      varying vec3 vLocalPos;`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <opaque_fragment>',
+      `
+      if (vLocalPos.z > 0.0 && vLocalPos.y > 0.35) {
+        float blinkHeight = max(0.08, uEyeBlink);
+        vec2 rightEye = vec2((vLocalPos.x - 1.18) / 0.42, (vLocalPos.y - 1.7) / (0.43 * blinkHeight));
+        vec2 leftEye = vec2((vLocalPos.x + 1.18) / 0.42, (vLocalPos.y - 1.7) / (0.43 * blinkHeight));
+        float rightEyeMask = 1.0 - smoothstep(0.76, 1.0, dot(rightEye, rightEye));
+        float leftEyeMask = 1.0 - smoothstep(0.76, 1.0, dot(leftEye, leftEye));
 
-  const interiorMaterial = new THREE.MeshBasicMaterial({ 
-    color: 0x000000,
+        vec2 rightGlint = vec2((vLocalPos.x - 1.18) / 0.08, (vLocalPos.y - 1.76) / (0.08 * blinkHeight));
+        vec2 leftGlint = vec2((vLocalPos.x + 1.18) / 0.08, (vLocalPos.y - 1.76) / (0.08 * blinkHeight));
+        float rightGlintMask = 1.0 - smoothstep(0.55, 1.0, dot(rightGlint, rightGlint));
+        float leftGlintMask = 1.0 - smoothstep(0.55, 1.0, dot(leftGlint, leftGlint));
+
+        float eyeMask = max(rightEyeMask, leftEyeMask);
+        float glintMask = max(rightGlintMask, leftGlintMask);
+        float eyeGlow = 1.0 - smoothstep(1.0, 2.0, min(dot(rightEye, rightEye), dot(leftEye, leftEye)));
+
+        outgoingLight = mix(outgoingLight, vec3(0.18, 0.15, 0.03), eyeGlow * 0.18 * uEyeBlink);
+        outgoingLight = mix(outgoingLight, vec3(0.006, 0.007, 0.01), eyeMask);
+        vec3 glintColor = mix(vec3(0.95, 0.82, 0.34), vec3(0.15, 0.92, 1.0), uPowerMode);
+        outgoingLight = mix(outgoingLight, glintColor, glintMask * uEyeBlink);
+      }
+      #include <opaque_fragment>`
+    );
+  };
+
+  const mouthMaterial = new THREE.MeshBasicMaterial({
+    color: 0x010103,
     side: THREE.DoubleSide
   });
 
-  const tongueMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0xee0033, 
-    roughness: 0.6 
-  });
+  const jawGeometry = new THREE.SphereGeometry(radius, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+  const capGeometry = new THREE.CircleGeometry(radius * 0.985, 48);
 
-  const neonMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-  
-  // --- Upper Half ---
-  const upperGroup = new THREE.Group();
-  const jawGeo = new THREE.SphereGeometry(3.5, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-  const capGeo = new THREE.CircleGeometry(3.48, 32);
+  const upperShell = new THREE.Mesh(jawGeometry, upperShellMaterial);
+  const upperCap = new THREE.Mesh(capGeometry, mouthMaterial);
+  upperCap.rotation.x = Math.PI / 2;
+  upperGroup.add(upperShell, upperCap);
 
-  const shellUpper = new THREE.Mesh(jawGeo, shellMaterial);
-  const capUpper = new THREE.Mesh(capGeo, interiorMaterial);
-  capUpper.rotation.x = Math.PI / 2;
-  upperGroup.add(shellUpper, capUpper);
-
-  // --- Lower Half ---
-  const lowerGroup = new THREE.Group();
   lowerGroup.rotation.x = Math.PI;
-  const shellLower = new THREE.Mesh(jawGeo, shellMaterial);
-  const capLower = new THREE.Mesh(capGeo, interiorMaterial);
-  capLower.rotation.x = -Math.PI / 2;
-  lowerGroup.add(shellLower, capLower);
+  const lowerShell = new THREE.Mesh(jawGeometry, shellMaterial);
+  const lowerCap = new THREE.Mesh(capGeometry, mouthMaterial);
+  lowerCap.rotation.x = -Math.PI / 2;
+  lowerGroup.add(lowerShell, lowerCap);
 
-  // --- The Throat (Seals the back hinge) ---
-  const throatGeo = new THREE.SphereGeometry(3.45, 32, 16, Math.PI, Math.PI);
-  const throat = new THREE.Mesh(throatGeo, interiorMaterial);
-  group.add(throat);
-
-  // --- The Proper Tongue ---
-  const tongueGroup = new THREE.Group();
-  const tongue = new THREE.Mesh(
-    new THREE.CapsuleGeometry(1.4, 1.5, 4, 16),
-    tongueMaterial
+  const throat = new THREE.Mesh(
+    new THREE.SphereGeometry(radius * 0.96, 40, 14, Math.PI, Math.PI),
+    mouthMaterial
   );
-  tongue.scale.set(1.2, 0.4, 1.0);
-  tongue.rotation.x = Math.PI / 2;
-  // Tucked deep enough to never poke out when closed
-  tongue.position.set(0, 0.2, -0.8); 
-  tongueGroup.add(tongue);
-  lowerGroup.add(tongueGroup);
+  group.add(throat, upperGroup, lowerGroup);
 
-  group.add(upperGroup, lowerGroup);
+  const baseEmissiveIntensity = 0.45;
+  const poweredEmissiveIntensity = 1.25;
+  let isPowerMode = false;
 
-  // --- Tactical Eyes ---
-  function createCyberEye(posX) {
-    const eyeGroup = new THREE.Group();
-    const hex = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.48, 6), neonMaterial);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.04, 8, 32), neonMaterial);
-    ring.name = 'eyeRing';
-    const lens = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), neonMaterial);
-    
-    eyeGroup.add(hex, ring, lens);
-    eyeGroup.position.set(posX, 1.8, 2.45);
-    eyeGroup.rotation.y = posX > 0 ? 0.35 : -0.35;
-    eyeGroup.rotation.z = Math.PI / 6;
-    return eyeGroup;
-  }
-  
-  const leftEye = createCyberEye(1.6);
-  const rightEye = createCyberEye(-1.6);
-  upperGroup.add(leftEye, rightEye);
+  group.setPowerMode = (enabled) => {
+    isPowerMode = Boolean(enabled);
+    eyeUniforms.power.value = isPowerMode ? 1 : 0;
+    if (!isPowerMode) {
+      shellMaterial.emissiveIntensity = baseEmissiveIntensity;
+      upperShellMaterial.emissiveIntensity = baseEmissiveIntensity;
+    }
+  };
 
-  // --- Animation ---
   group.userData = {
     type: 'pacman',
     update: (time) => {
@@ -101,8 +123,15 @@ export function createPacman() {
       upperGroup.rotation.x = -chomp;
       lowerGroup.rotation.x = Math.PI + chomp;
 
-      leftEye.getObjectByName('eyeRing').rotation.z = time * 2.5;
-      rightEye.getObjectByName('eyeRing').rotation.z = -time * 2.5;
+      const blink = Math.sin(time * 2.1) > 0.985 ? 0.18 : 1;
+      eyeUniforms.blink.value = blink;
+
+      if (isPowerMode) {
+        const pulse = 0.82 + Math.sin(time * 8.0) * 0.18;
+        const intensity = poweredEmissiveIntensity * pulse;
+        shellMaterial.emissiveIntensity = intensity;
+        upperShellMaterial.emissiveIntensity = intensity;
+      }
     }
   };
 
