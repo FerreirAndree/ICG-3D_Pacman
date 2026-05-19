@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { TILE_SIZE } from './mazePieces.js';
 import { createPellet } from './entities.js';
+import { getAbsoluteDirections } from './mazeGraph.js';
 
 export const PELLET_TYPES = {
   STANDARD: 0,
@@ -47,6 +48,16 @@ export class PelletManager {
       const rotation = tile.rotation;
       const hasPowerPellet = tile.hasPowerPellet;
 
+      const shouldPlaceConnectorPellet = (localDirection) => {
+        const direction = getAbsoluteDirections([localDirection], rotation)[0];
+        return mazeGraph.getNeighbor(tile, direction)?.type !== 'ghostchamber';
+      };
+
+      const addConnectorPellet = (localDirection, x, z) => {
+        if (!shouldPlaceConnectorPellet(localDirection)) return;
+        positions.push({ pos: tilePos.clone().add(rotateOffset(x, z)), power: false });
+      };
+
       // Helper to rotate local coordinate offsets
       const rotateOffset = (x, z) => {
         const nx = x * Math.cos(rotation) + z * Math.sin(rotation);
@@ -55,28 +66,28 @@ export class PelletManager {
       };
 
       if (tile.type === 'straight') {
-        positions.push({ pos: tilePos.clone().add(rotateOffset(0, -6)), power: false });
+        addConnectorPellet('north', 0, -6);
         positions.push({ pos: tilePos.clone().add(rotateOffset(0, 0)), power: hasPowerPellet });
-        positions.push({ pos: tilePos.clone().add(rotateOffset(0, 6)), power: false });
+        addConnectorPellet('south', 0, 6);
       } 
       else if (tile.type === 'corner') {
         const cornerOffset = 3.57 * (1 - Math.SQRT1_2); // 1.0456
-        positions.push({ pos: tilePos.clone().add(rotateOffset(0, -6)), power: false });
+        addConnectorPellet('north', 0, -6);
         positions.push({ pos: tilePos.clone().add(rotateOffset(cornerOffset, -cornerOffset)), power: hasPowerPellet });
-        positions.push({ pos: tilePos.clone().add(rotateOffset(6, 0)), power: false });
+        addConnectorPellet('east', 6, 0);
       }
       else if (tile.type === 'tjunction') {
         positions.push({ pos: tilePos.clone().add(rotateOffset(0, 0)), power: hasPowerPellet });
-        positions.push({ pos: tilePos.clone().add(rotateOffset(0, -6)), power: false });
-        positions.push({ pos: tilePos.clone().add(rotateOffset(-6, 0)), power: false });
-        positions.push({ pos: tilePos.clone().add(rotateOffset(6, 0)), power: false });
+        addConnectorPellet('north', 0, -6);
+        addConnectorPellet('west', -6, 0);
+        addConnectorPellet('east', 6, 0);
       }
       else if (tile.type === 'crossroad') {
         positions.push({ pos: tilePos.clone().add(rotateOffset(0, 0)), power: hasPowerPellet });
-        positions.push({ pos: tilePos.clone().add(rotateOffset(0, -6)), power: false });
-        positions.push({ pos: tilePos.clone().add(rotateOffset(0, 6)), power: false });
-        positions.push({ pos: tilePos.clone().add(rotateOffset(-6, 0)), power: false });
-        positions.push({ pos: tilePos.clone().add(rotateOffset(6, 0)), power: false });
+        addConnectorPellet('north', 0, -6);
+        addConnectorPellet('south', 0, 6);
+        addConnectorPellet('west', -6, 0);
+        addConnectorPellet('east', 6, 0);
       }
     });
 

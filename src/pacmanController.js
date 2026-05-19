@@ -131,6 +131,11 @@ function getRoutePositionAt(route, progress) {
 }
 
 function createEdge(fromNode, toNode, inputDirection, endDirection, points, options = {}) {
+  const isEnteringGhostChamber = (
+    fromNode.tile?.type !== 'ghostchamber'
+    && toNode.tile?.type === 'ghostchamber'
+  );
+
   return {
     from: fromNode,
     to: toNode,
@@ -139,6 +144,7 @@ function createEdge(fromNode, toNode, inputDirection, endDirection, points, opti
     continueDirection: options.continueDirection ?? null,
     reverseDirection: options.reverseDirection ?? OPPOSITE_DIRECTIONS[endDirection],
     reverseContinueDirection: options.reverseContinueDirection ?? null,
+    allowedEntities: options.allowedEntities ?? (isEnteringGhostChamber ? [] : ['pacman', 'ghost']),
     points
   };
 }
@@ -350,6 +356,7 @@ export class EntityController {
   constructor(model, graph, options = {}) {
     this.model = model;
     this.graph = graph;
+    this.entityType = options.entityType ?? 'pacman';
     this.navigationNodes = buildNavigationGraph(graph);
     this.speed = options.speed ?? 13;
     this.currentNode = null;
@@ -471,7 +478,16 @@ export class EntityController {
   }
 
   findEdge(direction) {
-    return this.currentNode?.edges.find((edge) => edge.inputDirection === direction) || null;
+    return this.getAllowedEdges(this.currentNode)
+      .find((edge) => edge.inputDirection === direction) || null;
+  }
+
+  getAllowedEdges(node = this.currentNode) {
+    return (node?.edges || []).filter((edge) => this.canUseEdge(edge));
+  }
+
+  canUseEdge(edge) {
+    return !edge.allowedEntities || edge.allowedEntities.includes(this.entityType);
   }
 
   startEdge(edge, forceContinueDirection = null, startedFromIntent = null) {

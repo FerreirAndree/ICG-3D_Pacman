@@ -373,7 +373,7 @@ const GHOST_DEFINITIONS = [
     uiColor: '#ff44bb',
     uiRgb: '255, 68, 187',
     spawnConnector: 'center_back',
-    aiProfile: 'direct'
+    aiProfile: 'ambush'
   },
   {
     id: 'inky',
@@ -382,7 +382,7 @@ const GHOST_DEFINITIONS = [
     uiColor: '#00ccff',
     uiRgb: '0, 204, 255',
     spawnConnector: 'left_back',
-    aiProfile: 'direct'
+    aiProfile: 'vector'
   },
   {
     id: 'clyde',
@@ -391,7 +391,7 @@ const GHOST_DEFINITIONS = [
     uiColor: '#ffaa00',
     uiRgb: '255, 170, 0',
     spawnConnector: 'right_back',
-    aiProfile: 'direct'
+    aiProfile: 'shy'
   }
 ];
 
@@ -828,8 +828,12 @@ function startPowerPelletState() {
   });
   applyPowerVisualsToGhosts();
   forEachGhost((entry) => {
-    if (canGhostBeEaten(entry) && !isGhostRespawning(entry)) {
-      entry.ai.forceReverse(entry.controller);
+    if (
+      canGhostBeEaten(entry)
+      && !isGhostRespawning(entry)
+      && !isGhostControllerInHouse(entry.controller)
+    ) {
+      entry.ai.queueFrightenedReverse();
     }
   });
 }
@@ -925,6 +929,7 @@ function updateGhostAi() {
       ghostController: entry.controller,
       pacman: gamePacman,
       ghost: entry.model,
+      ghosts: gameGhosts,
       canGhostBeEaten,
       isGhostRespawning: isGhostRespawning(entry)
     });
@@ -1029,8 +1034,16 @@ function createGameGhostEntry(definition, graph) {
     id: definition.id,
     definition,
     model,
-    controller: new EntityController(model, graph, { speed: GHOST_NORMAL_SPEED }),
-    ai: new GhostAIController({ profile: definition.aiProfile }),
+    controller: new EntityController(model, graph, {
+      speed: GHOST_NORMAL_SPEED,
+      entityType: 'ghost'
+    }),
+    ai: new GhostAIController({
+      profile: definition.aiProfile,
+      randomSeed: definition.id.split('').reduce((seed, char) => (
+        ((seed * 31) + char.charCodeAt(0)) >>> 0
+      ), 0x9e3779b9)
+    }),
     powerState: {
       eatenDuringCurrentPower: false,
       recoveringFromEaten: false
@@ -1095,7 +1108,8 @@ function buildGameMaze() {
   gamePacman.scale.setScalar(0.32);
   gameMaze.add(gamePacman);
 
-  pacmanController = new EntityController(gamePacman, currentGraph);
+  pacmanController = new EntityController(gamePacman, currentGraph, { entityType: 'pacman' });
+  gamePacman.userData.controller = pacmanController;
   gameGhosts = getActiveGhostDefinitions().map((definition) => createGameGhostEntry(definition, currentGraph));
   clearPowerPelletState();
   
