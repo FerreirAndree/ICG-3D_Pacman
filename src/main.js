@@ -195,6 +195,11 @@ const uiHtml = `
     </div>
   </div>
 
+  <button class="editor-save-fab" id="btn-save-map" type="button">
+    <span class="editor-save-kicker">Editor Slot</span>
+    <span class="editor-save-label">Save Map</span>
+  </button>
+
   <div class="modal-overlay" id="export-modal">
     <div class="modal-content">
       <h3 class="modal-title">Export Maze</h3>
@@ -227,6 +232,23 @@ const uiHtml = `
       </div>
       <div class="modal-footer">
         <button class="btn-close" id="btn-modal-import-close">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay editor-save-modal" id="editor-save-modal">
+    <div class="modal-content editor-save-modal-content">
+      <p class="editor-modal-eyebrow" id="editor-save-modal-eyebrow">Map Editor</p>
+      <h3 class="modal-title editor-save-modal-title" id="editor-save-modal-title">Save Map</h3>
+      <p class="editor-save-modal-message" id="editor-save-modal-message">Name this map before saving it to your slots.</p>
+      <label class="editor-save-input-wrap" id="editor-save-input-wrap">
+        <span>Map Name</span>
+        <input id="editor-save-name-input" type="text" maxlength="28" autocomplete="off" />
+      </label>
+      <p class="editor-save-modal-error" id="editor-save-modal-error"></p>
+      <div class="editor-save-modal-actions">
+        <button class="editor-modal-secondary" id="btn-editor-save-cancel" type="button">Cancel</button>
+        <button class="editor-modal-primary" id="btn-editor-save-confirm" type="button">Save</button>
       </div>
     </div>
   </div>
@@ -379,28 +401,11 @@ const uiHtml = `
           <h2>Your Maps</h2>
         </div>
       </div>
-      <div class="map-manager-grid">
-        <button class="manager-map-card" id="btn-map-edit-current">
-          <canvas class="map-thumbnail" id="manager-current-map-thumbnail" width="320" height="320" aria-hidden="true"></canvas>
-          <span class="map-card-name">Classic</span>
-          <span class="manager-card-hover">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" />
-              <path d="M14 7l3 3" />
-            </svg>
-          </span>
-        </button>
-        <button class="manager-create-card" id="btn-map-create-new">
-          <span class="manager-plus">+</span>
-          <span class="manager-create-label">New Map</span>
-        </button>
-        <button class="manager-map-card disabled" disabled>
-          <canvas class="map-thumbnail" id="manager-empty-map-thumbnail" width="320" height="320" aria-hidden="true"></canvas>
-          <span class="map-card-name">Empty Slot</span>
-        </button>
-      </div>
+      <div class="map-manager-grid" id="map-manager-grid"></div>
     </div>
   </div>
+
+  <div class="editor-toast" id="editor-toast"></div>
 `;
 appContainer.insertAdjacentHTML('beforeend', uiHtml);
 appContainer.classList.add('landing-active');
@@ -502,29 +507,27 @@ let activeGhostCount = 4;
 let currentGameGraph = null;
 let selectedGameMapId = 'classic';
 let selectedMapGhostCount = 4;
+const USER_MAP_STORAGE_KEY = 'icg-3d-pacman-user-maps';
+const MAX_USER_MAPS = 2;
 
-const PLAY_MAP_CATALOG = [
+const BUILT_IN_MAPS = [
   {
     id: 'classic',
     name: 'Classic',
     description: 'Default glass-pipe maze',
     source: EXPERIMENTAL_GAME_MAP
-  },
-  {
-    id: 'coming-soon-1',
-    name: 'Custom 01',
-    description: 'Map slot reserved for your saved mazes',
-    source: null,
-    disabled: true
-  },
-  {
-    id: 'coming-soon-2',
-    name: 'Custom 02',
-    description: 'Map slot reserved for your saved mazes',
-    source: null,
-    disabled: true
   }
 ];
+
+let userMaps = loadUserMaps();
+let editorSession = {
+  mode: 'none',
+  mapId: null,
+  name: '',
+  saveable: false
+};
+let isEditorDirty = false;
+let pendingSaveModalPayload = null;
 
 // --- 3D Landing Menu Variables ---
 let menuScene = null;
@@ -1303,8 +1306,46 @@ function createGameGhostEntry(definition, graph) {
   };
 }
 
+function loadUserMaps() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(USER_MAP_STORAGE_KEY) || '[]');
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((map) => map && typeof map.id === 'string' && typeof map.name === 'string' && Array.isArray(map.source))
+      .slice(0, MAX_USER_MAPS);
+  } catch {
+    return [];
+  }
+}
+
+function persistUserMaps() {
+  localStorage.setItem(USER_MAP_STORAGE_KEY, JSON.stringify(userMaps.slice(0, MAX_USER_MAPS)));
+}
+
+function getPlayableMaps() {
+  return [...BUILT_IN_MAPS, ...userMaps];
+}
+
+function createUserMapId() {
+  return `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function getMapById(mapId) {
+  return getPlayableMaps().find((map) => map.id === mapId) || BUILT_IN_MAPS[0];
+}
+
 function getSelectedGameMap() {
-  return PLAY_MAP_CATALOG.find((map) => map.id === selectedGameMapId) || PLAY_MAP_CATALOG[0];
+  return getMapById(selectedGameMapId);
 }
 
 function getEditorMapSource() {
@@ -1318,11 +1359,216 @@ function getEditorMapSource() {
   }));
 }
 
-function clearEditorMaze() {
+function setEditorDirty(dirty = true) {
+  isEditorDirty = Boolean(dirty);
+  updateEditorSaveUi();
+}
+
+function setEditorSession(session) {
+  editorSession = {
+    mode: session.mode || 'none',
+    mapId: session.mapId || null,
+    name: session.name || '',
+    saveable: Boolean(session.saveable)
+  };
+  setEditorDirty(false);
+}
+
+function showEditorToast(message) {
+  const toast = document.querySelector('#editor-toast');
+  if (!toast) return;
+
+  toast.textContent = message;
+  toast.classList.add('active');
+  clearTimeout(showEditorToast.timeoutId);
+  showEditorToast.timeoutId = setTimeout(() => {
+    toast.classList.remove('active');
+  }, 2600);
+}
+
+function closeEditorSaveModal() {
+  document.querySelector('#editor-save-modal')?.classList.remove('active');
+  pendingSaveModalPayload = null;
+}
+
+function openEditorMessageModal({ title, message, variant = 'info', primaryText = 'Close' }) {
+  const modal = document.querySelector('#editor-save-modal');
+  const eyebrow = document.querySelector('#editor-save-modal-eyebrow');
+  const titleEl = document.querySelector('#editor-save-modal-title');
+  const messageEl = document.querySelector('#editor-save-modal-message');
+  const inputWrap = document.querySelector('#editor-save-input-wrap');
+  const input = document.querySelector('#editor-save-name-input');
+  const errorEl = document.querySelector('#editor-save-modal-error');
+  const cancelBtn = document.querySelector('#btn-editor-save-cancel');
+  const confirmBtn = document.querySelector('#btn-editor-save-confirm');
+  if (!modal || !titleEl || !messageEl || !inputWrap || !input || !errorEl || !cancelBtn || !confirmBtn) return;
+
+  pendingSaveModalPayload = null;
+  modal.dataset.variant = variant;
+  eyebrow.textContent = variant === 'success' ? 'Saved' : 'Map Editor';
+  titleEl.textContent = title;
+  messageEl.textContent = message;
+  inputWrap.style.display = 'none';
+  input.value = '';
+  errorEl.textContent = '';
+  cancelBtn.style.display = 'none';
+  confirmBtn.textContent = primaryText;
+  modal.classList.add('active');
+  confirmBtn.focus();
+}
+
+function openSaveNameModal(source, suggestedName) {
+  const modal = document.querySelector('#editor-save-modal');
+  const eyebrow = document.querySelector('#editor-save-modal-eyebrow');
+  const titleEl = document.querySelector('#editor-save-modal-title');
+  const messageEl = document.querySelector('#editor-save-modal-message');
+  const inputWrap = document.querySelector('#editor-save-input-wrap');
+  const input = document.querySelector('#editor-save-name-input');
+  const errorEl = document.querySelector('#editor-save-modal-error');
+  const cancelBtn = document.querySelector('#btn-editor-save-cancel');
+  const confirmBtn = document.querySelector('#btn-editor-save-confirm');
+  if (!modal || !titleEl || !messageEl || !inputWrap || !input || !errorEl || !cancelBtn || !confirmBtn) return;
+
+  pendingSaveModalPayload = { source };
+  modal.dataset.variant = 'save';
+  eyebrow.textContent = editorSession.mapId ? 'Update Slot' : 'New Slot';
+  titleEl.textContent = 'Save Map';
+  messageEl.textContent = 'Name this map before saving it to your map slots.';
+  inputWrap.style.display = '';
+  input.value = suggestedName;
+  errorEl.textContent = '';
+  cancelBtn.style.display = '';
+  confirmBtn.textContent = 'Save Map';
+  modal.classList.add('active');
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
+}
+
+function updateEditorSaveUi() {
+  const btn = document.querySelector('#btn-save-map');
+  if (!btn) return;
+
+  btn.disabled = !editorSession.saveable;
+  const label = btn.querySelector('.editor-save-label');
+  const kicker = btn.querySelector('.editor-save-kicker');
+  if (label) {
+    label.textContent = editorSession.saveable
+      ? (isEditorDirty ? 'Save Map *' : 'Save Map')
+      : 'Read Only';
+  }
+  if (kicker) {
+    kicker.textContent = editorSession.saveable
+      ? (editorSession.name || 'Editor Slot')
+      : 'Built-In Map';
+  }
+  btn.title = editorSession.saveable
+    ? 'Save this map to your map slots'
+    : 'Built-in maps can be exported, but cannot be saved over';
+}
+
+function validateMapData(data, options = {}) {
+  if (!Array.isArray(data)) {
+    throw new Error("Map data must be an array of pieces.");
+  }
+
+  if (options.requirePlayable && data.length < 5) {
+    throw new Error("Saved maps need at least 5 maze pieces.");
+  }
+
+  const validTypes = ['straight', 'corner', 'tjunction', 'crossroad', 'teleport', 'ghostchamber'];
+  let pacmanSpawnCount = 0;
+  let ghostChamberCount = 0;
+  const occupiedTiles = new Set();
+  const checkOrthogonal = (rot) => {
+    const normalized = ((rot % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const remainder = normalized % (Math.PI / 2);
+    return remainder < 0.01 || Math.abs(remainder - (Math.PI / 2)) < 0.01;
+  };
+
+  for (let i = 0; i < data.length; i += 1) {
+    const item = data[i];
+    if (!item.type || !validTypes.includes(item.type)) {
+      throw new Error(`Invalid or missing piece type at index ${i}: ${item.type}`);
+    }
+    if (!Array.isArray(item.position) || item.position.length !== 3) {
+      throw new Error(`Invalid position array at index ${i}. Must have 3 coordinates.`);
+    }
+    
+    const expectedX = Math.round(item.position[0] / TILE_SIZE) * TILE_SIZE;
+    const expectedZ = Math.round(item.position[2] / TILE_SIZE) * TILE_SIZE;
+    if (Math.abs(item.position[0] - expectedX) > 0.1 || Math.abs(item.position[1]) > 0.1 || Math.abs(item.position[2] - expectedZ) > 0.1) {
+      throw new Error(`Invalid position at index ${i}. Must be aligned to the grid (multiples of ${TILE_SIZE}) at Y=0.`);
+    }
+
+    const tileKey = `${Math.round(item.position[0])},${Math.round(item.position[2])}`;
+    if (occupiedTiles.has(tileKey)) {
+      throw new Error(`Duplicate tile position at index ${i}.`);
+    }
+    occupiedTiles.add(tileKey);
+
+    if (typeof item.rotation !== 'number') {
+      throw new Error(`Invalid rotation at index ${i}. Must be a number.`);
+    }
+
+    if (!checkOrthogonal(item.rotation)) {
+      throw new Error(`Invalid rotation at index ${i}. Must be a multiple of 90 degrees (PI/2).`);
+    }
+
+    if (item.hasPacmanSpawn) {
+      pacmanSpawnCount += 1;
+      if (pacmanSpawnCount > 1) {
+        throw new Error("Multiple Pacman spawns detected. Only one is allowed.");
+      }
+      if (typeof item.pacmanSpawnRotation === 'number' && !checkOrthogonal(item.pacmanSpawnRotation)) {
+        throw new Error(`Invalid Pacman spawn rotation at index ${i}. Must be a multiple of 90 degrees.`);
+      }
+      if (item.hasPowerPellet) {
+        throw new Error(`Conflict at index ${i}: A tile cannot have both a Pacman spawn and a Power Pellet.`);
+      }
+    }
+
+    if (item.type === 'ghostchamber') {
+      ghostChamberCount += 1;
+      if (ghostChamberCount > 1) {
+        throw new Error("Multiple Ghost Chambers detected. Only one is allowed.");
+      }
+    }
+  }
+
+  if (options.requirePlayable) {
+    if (pacmanSpawnCount !== 1) {
+      throw new Error("Saved maps need exactly one Pacman spawn.");
+    }
+    if (ghostChamberCount !== 1) {
+      throw new Error("Saved maps need exactly one Ghost Chamber.");
+    }
+
+    const graph = buildMazeGraph(data);
+    for (const tile of graph.tiles.values()) {
+      const teleportPortalDirection = tile.type === 'teleport'
+        ? getGraphAbsoluteDirections(['west'], tile.rotation)[0]
+        : null;
+
+      for (const direction of tile.connectors) {
+        if (direction === teleportPortalDirection) continue;
+
+        if (!tile.exits.has(direction)) {
+          const openingName = direction.charAt(0).toUpperCase() + direction.slice(1);
+          throw new Error(`Open ${openingName} connection at (${tile.position.x}, ${tile.position.z}). Every pipe opening must connect to another piece.`);
+        }
+      }
+    }
+  }
+}
+
+function clearEditorMaze({ markDirty = false } = {}) {
   while (editorMaze.children.length > 0) {
     editorMaze.remove(editorMaze.children[0]);
   }
   removeGhostPiece();
+  setEditorDirty(markDirty);
 }
 
 function addEditorPieceFromMapItem(item) {
@@ -1384,22 +1630,127 @@ function addEditorPieceFromMapItem(item) {
   editorMaze.add(piece);
 }
 
-function loadMapIntoEditor(mapSource) {
-  clearEditorMaze();
+function loadMapIntoEditor(mapSource, options = {}) {
+  clearEditorMaze({ markDirty: false });
   mapSource.forEach(addEditorPieceFromMapItem);
+  setEditorDirty(Boolean(options.markDirty));
+}
+
+function openEditorForBuiltInMap(map) {
+  setEditorSession({
+    mode: 'template',
+    mapId: map.id,
+    name: map.name,
+    saveable: false
+  });
+  loadMapIntoEditor(map.source);
+  navigateTo('/editor');
+}
+
+function openEditorForSavedMap(map) {
+  setEditorSession({
+    mode: 'saved',
+    mapId: map.id,
+    name: map.name,
+    saveable: true
+  });
+  loadMapIntoEditor(map.source);
+  navigateTo('/editor');
+}
+
+function openEditorForNewMap() {
+  if (userMaps.length >= MAX_USER_MAPS) {
+    openEditorMessageModal({
+      title: 'No Free Slots',
+      message: 'All map slots are already occupied. Edit an existing map or export your work before replacing anything.',
+      variant: 'error'
+    });
+    return;
+  }
+
+  setEditorSession({
+    mode: 'new',
+    mapId: null,
+    name: '',
+    saveable: true
+  });
+  clearEditorMaze({ markDirty: false });
+  navigateTo('/editor');
+}
+
+function commitEditorMapSave(source, name) {
+  const existingIndex = userMaps.findIndex((map) => map.id === editorSession.mapId);
+  let savedId = editorSession.mapId;
+
+  if (existingIndex >= 0) {
+    userMaps[existingIndex] = {
+      ...userMaps[existingIndex],
+      name,
+      source,
+      updatedAt: Date.now()
+    };
+  } else {
+    if (userMaps.length >= MAX_USER_MAPS) {
+      openEditorMessageModal({
+        title: 'No Free Slots',
+        message: 'All map slots are already occupied. Edit an existing map or export your work before replacing anything.',
+        variant: 'error'
+      });
+      return;
+    }
+
+    savedId = createUserMapId();
+    userMaps.push({
+      id: savedId,
+      name,
+      source,
+      updatedAt: Date.now()
+    });
+  }
+
+  persistUserMaps();
+  selectedGameMapId = savedId;
+  setEditorSession({
+    mode: 'saved',
+    mapId: savedId,
+    name,
+    saveable: true
+  });
+  setEditorDirty(false);
+  navigateTo('/maps');
+}
+
+function saveCurrentEditorMap() {
+  if (!editorSession.saveable) {
+    openEditorMessageModal({
+      title: 'Read Only Map',
+      message: 'Classic can be opened for inspection and export, but it cannot be saved over. Create a new map slot to save changes.',
+      variant: 'error'
+    });
+    return;
+  }
+
+  const source = getEditorMapSource();
+  try {
+    validateMapData(source, { requirePlayable: true });
+  } catch (error) {
+    openEditorMessageModal({
+      title: 'Map Not Ready',
+      message: error.message,
+      variant: 'error'
+    });
+    return;
+  }
+
+  const suggestedName = editorSession.name || `Custom ${String(userMaps.length + 1).padStart(2, '0')}`;
+  openSaveNameModal(source, suggestedName);
 }
 
 function buildGameMaze() {
   gameMaze.clear();
   gameGhosts = [];
 
-  // If the editor has pieces, use the editor's map instead of the experimental one
-  let mapSource = [];
-  if (editorMaze.children.length > 0) {
-    mapSource = getEditorMapSource();
-  } else {
-    mapSource = getSelectedGameMap().source;
-  }
+  const mapSource = getSelectedGameMap().source;
 
   mapSource.forEach((item) => {
     const piece = createMazePiece(item.type);
@@ -1826,10 +2177,13 @@ function enterEditorMode() {
   // Switch to Editor Camera
   camera.position.set(...EDITOR_VIEW.pos);
   controls.target.set(...EDITOR_VIEW.target);
+  updateEditorSaveUi();
 }
 
 function exitEditorMode() {
   if (!isEditorMode) return;
+
+  const hadUnsavedChanges = isEditorDirty;
 
   isEditorMode = false;
 
@@ -1864,6 +2218,10 @@ function exitEditorMode() {
   camera.updateProjectionMatrix();
   camera.position.set(...GALLERY_VIEW.pos);
   controls.target.set(...GALLERY_VIEW.target);
+
+  if (hadUnsavedChanges) {
+    showEditorToast('Editor closed without saving changes.');
+  }
 }
 
 function setDevControlsVisible(visible) {
@@ -2452,9 +2810,19 @@ function drawMapThumbnail(canvas, mapSource) {
 
 function renderMapPicker() {
   const grid = document.querySelector('#map-picker-grid');
-  if (!grid || grid.dataset.rendered === 'true') return;
+  if (!grid) return;
+  const playableMaps = getPlayableMaps();
+  const cards = [
+    ...playableMaps,
+    ...Array.from({ length: Math.max(0, 3 - playableMaps.length) }, (_, index) => ({
+      id: `empty-${index}`,
+      name: 'Empty Slot',
+      source: null,
+      disabled: true
+    }))
+  ].slice(0, 3);
 
-  grid.innerHTML = PLAY_MAP_CATALOG.map((map) => `
+  grid.innerHTML = cards.map((map) => `
     <button class="map-card${map.id === selectedGameMapId ? ' selected' : ''}${map.disabled ? ' disabled' : ''}" data-map-id="${map.id}" ${map.disabled ? 'disabled' : ''}>
       <canvas class="map-thumbnail" width="320" height="320" aria-hidden="true"></canvas>
       <span class="map-card-name">${map.name}</span>
@@ -2462,7 +2830,7 @@ function renderMapPicker() {
   `).join('');
 
   grid.querySelectorAll('.map-card').forEach((card) => {
-    const map = PLAY_MAP_CATALOG.find((entry) => entry.id === card.dataset.mapId);
+    const map = cards.find((entry) => entry.id === card.dataset.mapId);
     const canvas = card.querySelector('canvas');
     drawMapThumbnail(canvas, map.source);
     if (map.disabled) return;
@@ -2479,21 +2847,75 @@ function renderMapPicker() {
       });
     });
   });
-
-  grid.dataset.rendered = 'true';
 }
 
 function renderMapManager() {
-  const currentCanvas = document.querySelector('#manager-current-map-thumbnail');
-  const emptyCanvas = document.querySelector('#manager-empty-map-thumbnail');
+  const grid = document.querySelector('#map-manager-grid');
+  if (!grid) return;
 
-  if (currentCanvas) {
-    drawMapThumbnail(currentCanvas, EXPERIMENTAL_GAME_MAP);
+  const cards = [
+    ...BUILT_IN_MAPS.map((map) => ({
+      ...map,
+      action: 'template',
+      readonly: true
+    })),
+    ...userMaps.map((map) => ({
+      ...map,
+      action: 'edit'
+    }))
+  ];
+
+  if (userMaps.length < MAX_USER_MAPS) {
+    cards.push({
+      id: 'new',
+      name: 'New Map',
+      action: 'new',
+      source: null
+    });
   }
 
-  if (emptyCanvas) {
-    drawEmptyMapThumbnail(emptyCanvas);
+  while (cards.length < 3) {
+    cards.push({
+      id: `empty-${cards.length}`,
+      name: 'Empty Slot',
+      action: 'empty',
+      source: null,
+      disabled: true
+    });
   }
+
+  grid.innerHTML = cards.slice(0, 3).map((map) => {
+    if (map.action === 'new') {
+      return `
+        <button class="manager-create-card" data-action="new" type="button">
+          <span class="manager-plus">+</span>
+          <span class="manager-create-label">New Map</span>
+        </button>
+      `;
+    }
+
+    return `
+      <button class="manager-map-card${map.disabled ? ' disabled' : ''}" data-map-id="${escapeHtml(map.id)}" data-action="${map.action}" ${map.disabled ? 'disabled' : ''} type="button">
+        <canvas class="map-thumbnail" width="320" height="320" aria-hidden="true"></canvas>
+        <span class="map-card-name">${escapeHtml(map.name)}</span>
+        ${map.disabled ? '' : `
+          <span class="manager-card-hover" aria-hidden="true">
+            ${map.readonly ? `
+              <svg viewBox="0 0 24 24"><path d="M8 7V5.8a4 4 0 0 1 8 0V7"/><rect x="5" y="9" width="14" height="11" rx="2"/><path d="M12 13v3"/></svg>
+            ` : `
+              <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="m16.5 3.5 3 3L8 18l-4 1 1-4Z"/></svg>
+            `}
+          </span>
+        `}
+      </button>
+    `;
+  }).join('');
+
+  grid.querySelectorAll('.manager-map-card').forEach((card) => {
+    const map = cards.find((entry) => entry.id === card.dataset.mapId);
+    const canvas = card.querySelector('canvas');
+    drawMapThumbnail(canvas, map?.source);
+  });
 }
 
 function updateMapGhostStepper() {
@@ -2773,13 +3195,64 @@ document.querySelector('#btn-ghost-count-plus').addEventListener('click', () => 
   updateMapGhostStepper();
 });
 document.querySelector('#btn-map-manager-back').addEventListener('click', () => navigateTo('/menu'));
-document.querySelector('#btn-map-edit-current').addEventListener('click', () => {
-  loadMapIntoEditor(EXPERIMENTAL_GAME_MAP);
-  navigateTo('/editor');
+document.querySelector('#map-manager-grid').addEventListener('click', (event) => {
+  const card = event.target.closest('[data-action]');
+  if (!card) return;
+
+  const action = card.dataset.action;
+  if (action === 'new') {
+    openEditorForNewMap();
+    return;
+  }
+
+  const map = getMapById(card.dataset.mapId);
+  if (action === 'template') {
+    openEditorForBuiltInMap(map);
+  } else if (action === 'edit') {
+    openEditorForSavedMap(map);
+  }
 });
-document.querySelector('#btn-map-create-new').addEventListener('click', () => {
-  clearEditorMaze();
-  navigateTo('/editor');
+document.querySelector('#btn-save-map').addEventListener('click', saveCurrentEditorMap);
+document.querySelector('#btn-editor-save-cancel').addEventListener('click', closeEditorSaveModal);
+document.querySelector('#btn-editor-save-confirm').addEventListener('click', () => {
+  const modal = document.querySelector('#editor-save-modal');
+  if (modal?.dataset.variant !== 'save') {
+    closeEditorSaveModal();
+    return;
+  }
+
+  const input = document.querySelector('#editor-save-name-input');
+  const errorEl = document.querySelector('#editor-save-modal-error');
+  const name = input?.value.trim() || '';
+  if (!name) {
+    if (errorEl) errorEl.textContent = 'Map name is required.';
+    input?.focus();
+    return;
+  }
+
+  const source = pendingSaveModalPayload?.source;
+  if (!source) {
+    closeEditorSaveModal();
+    openEditorMessageModal({
+      title: 'Save Failed',
+      message: 'The editor lost the pending map data. Open the save action again.',
+      variant: 'error'
+    });
+    return;
+  }
+  closeEditorSaveModal();
+  commitEditorMapSave(source, name);
+});
+document.querySelector('#editor-save-name-input').addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    document.querySelector('#btn-editor-save-confirm').click();
+  }
+});
+document.querySelector('#editor-save-modal').addEventListener('click', (event) => {
+  if (event.target === document.querySelector('#editor-save-modal')) {
+    closeEditorSaveModal();
+  }
 });
 
 registerRoutes({
@@ -3106,7 +3579,8 @@ window.addEventListener('mousemove', (e) => {
 window.addEventListener('keydown', (e) => {
   // Block all hotkeys if a modal is open
   if (document.querySelector('#export-modal').classList.contains('active') || 
-      document.querySelector('#import-modal').classList.contains('active')) return;
+      document.querySelector('#import-modal').classList.contains('active') ||
+      document.querySelector('#editor-save-modal').classList.contains('active')) return;
 
   const key = e.key.toLowerCase();
 
@@ -3191,6 +3665,7 @@ window.addEventListener('keydown', (e) => {
         c.position.add(offset);
       });
       editorMaze.position.set(0, 0, 0);
+      if (offset.lengthSq() > 0) setEditorDirty(true);
       exitShiftMode();
     }
     if (key === 'escape') {
@@ -3267,15 +3742,18 @@ window.addEventListener('mousedown', (e) => {
   
   // Block placement if a modal is open
   if (document.querySelector('#export-modal').classList.contains('active') || 
-      document.querySelector('#import-modal').classList.contains('active')) return;
+      document.querySelector('#import-modal').classList.contains('active') ||
+      document.querySelector('#editor-save-modal').classList.contains('active')) return;
   
   // Prevent placing pieces when clicking UI elements
   if (e.target.closest('.bottom-bar') || 
       e.target.closest('.left-bar') || 
       e.target.closest('.top-controls') || 
       e.target.closest('#command-deck') || 
+      e.target.closest('#btn-save-map') ||
       e.target.closest('#export-modal') ||
-      e.target.closest('#import-modal')) {
+      e.target.closest('#import-modal') ||
+      e.target.closest('#editor-save-modal')) {
     return;
   }
   
@@ -3306,89 +3784,25 @@ function placePiece() {
     const validTypes = ['straight', 'corner', 'tjunction', 'crossroad'];
     if (currentPieceType === 'pacmanspawn') validTypes.push('teleport');
     
-    if (existing && validTypes.includes(existing.userData.type)) {
-      if (currentPieceType === 'powerpellet') {
-        if (!existing.userData.hasPowerPellet && existing.userData.hasPacmanSpawn) {
-          existing.userData.hasPacmanSpawn = false;
-          const oldSpawn = existing.getObjectByName('pacmanSpawnIndicator');
-          if (oldSpawn) existing.remove(oldSpawn);
-        }
-        // Toggle it
-        existing.userData.hasPowerPellet = !existing.userData.hasPowerPellet;
-        
-        // Update visual indicator
-        let indicator = existing.getObjectByName('powerPelletIndicator');
-        if (existing.userData.hasPowerPellet) {
-          if (!indicator) {
-            indicator = createPellet();
-            indicator.name = 'powerPelletIndicator';
-            
-            let localX = 0;
-            let localZ = 0;
-            if (existing.userData.type === 'corner') {
-              const cornerOffset = 3.57 * (1 - Math.SQRT1_2);
-              localX = cornerOffset;
-              localZ = -cornerOffset;
-            }
-            
-            indicator.position.set(localX, 2.5, localZ); // Hover centered inside tube
-            indicator.scale.set(0.4, 0.4, 0.4);
-            
-            // Make it visible through the glass in the editor
-            indicator.traverse(obj => {
-              if (obj.material) {
-                obj.material = obj.material.clone();
-                obj.material.depthTest = false;
-                obj.renderOrder = 998;
-              }
-            });
-            
-            existing.add(indicator);
-          }
-        } else if (indicator) {
-          existing.remove(indicator);
-        }
-      } else {
-        // Pacman Spawn
-        if (!existing.userData.hasPacmanSpawn && existing.userData.hasPowerPellet) {
-          existing.userData.hasPowerPellet = false;
-          const oldPellet = existing.getObjectByName('powerPelletIndicator');
-          if (oldPellet) existing.remove(oldPellet);
-        }
+    if (!existing || !validTypes.includes(existing.userData.type)) {
+      return;
+    }
 
-        if (existing.userData.hasPacmanSpawn) {
-          const normalizeAngle = (a) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-          const currentRotNorm = normalizeAngle(currentRotation);
-          const existingRotNorm = normalizeAngle(existing.userData.pacmanSpawnRotation);
-
-          if (Math.abs(currentRotNorm - existingRotNorm) < 0.01) {
-            // Toggle off if clicking with the exact same rotation
-            existing.userData.hasPacmanSpawn = false;
-            const oldIndicator = existing.getObjectByName('pacmanSpawnIndicator');
-            if (oldIndicator) existing.remove(oldIndicator);
-          } else {
-            // Update rotation if clicking with a different rotation
-            existing.userData.pacmanSpawnRotation = currentRotation;
-            const indicator = existing.getObjectByName('pacmanSpawnIndicator');
-            if (indicator) {
-              indicator.rotation.y = currentRotation - existing.rotation.y;
-            }
-          }
-        } else {
-          // Remove existing spawn from anywhere else
-          editorMaze.children.forEach(c => {
-            if (c.userData.hasPacmanSpawn) {
-              c.userData.hasPacmanSpawn = false;
-              const oldIndicator = c.getObjectByName('pacmanSpawnIndicator');
-              if (oldIndicator) c.remove(oldIndicator);
-            }
-          });
-
-          existing.userData.hasPacmanSpawn = true;
-          existing.userData.pacmanSpawnRotation = currentRotation;
-          
-          const indicator = createPacman();
-          indicator.name = 'pacmanSpawnIndicator';
+    if (currentPieceType === 'powerpellet') {
+      if (!existing.userData.hasPowerPellet && existing.userData.hasPacmanSpawn) {
+        existing.userData.hasPacmanSpawn = false;
+        const oldSpawn = existing.getObjectByName('pacmanSpawnIndicator');
+        if (oldSpawn) existing.remove(oldSpawn);
+      }
+      // Toggle it
+      existing.userData.hasPowerPellet = !existing.userData.hasPowerPellet;
+      
+      // Update visual indicator
+      let indicator = existing.getObjectByName('powerPelletIndicator');
+      if (existing.userData.hasPowerPellet) {
+        if (!indicator) {
+          indicator = createPellet();
+          indicator.name = 'powerPelletIndicator';
           
           let localX = 0;
           let localZ = 0;
@@ -3398,14 +3812,81 @@ function placePiece() {
             localZ = -cornerOffset;
           }
           
-          indicator.position.set(localX, 2.5, localZ);
-          indicator.scale.setScalar(0.32);
-          indicator.rotation.y = currentRotation - existing.rotation.y;
+          indicator.position.set(localX, 2.5, localZ); // Hover centered inside tube
+          indicator.scale.set(0.4, 0.4, 0.4);
+          
+          // Make it visible through the glass in the editor
+          indicator.traverse(obj => {
+            if (obj.material) {
+              obj.material = obj.material.clone();
+              obj.material.depthTest = false;
+              obj.renderOrder = 998;
+            }
+          });
           
           existing.add(indicator);
         }
+      } else if (indicator) {
+        existing.remove(indicator);
+      }
+    } else {
+      // Pacman Spawn
+      if (!existing.userData.hasPacmanSpawn && existing.userData.hasPowerPellet) {
+        existing.userData.hasPowerPellet = false;
+        const oldPellet = existing.getObjectByName('powerPelletIndicator');
+        if (oldPellet) existing.remove(oldPellet);
+      }
+
+      if (existing.userData.hasPacmanSpawn) {
+        const normalizeAngle = (a) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        const currentRotNorm = normalizeAngle(currentRotation);
+        const existingRotNorm = normalizeAngle(existing.userData.pacmanSpawnRotation);
+
+        if (Math.abs(currentRotNorm - existingRotNorm) < 0.01) {
+          // Toggle off if clicking with the exact same rotation
+          existing.userData.hasPacmanSpawn = false;
+          const oldIndicator = existing.getObjectByName('pacmanSpawnIndicator');
+          if (oldIndicator) existing.remove(oldIndicator);
+        } else {
+          // Update rotation if clicking with a different rotation
+          existing.userData.pacmanSpawnRotation = currentRotation;
+          const indicator = existing.getObjectByName('pacmanSpawnIndicator');
+          if (indicator) {
+            indicator.rotation.y = currentRotation - existing.rotation.y;
+          }
+        }
+      } else {
+        // Remove existing spawn from anywhere else
+        editorMaze.children.forEach(c => {
+          if (c.userData.hasPacmanSpawn) {
+            c.userData.hasPacmanSpawn = false;
+            const oldIndicator = c.getObjectByName('pacmanSpawnIndicator');
+            if (oldIndicator) c.remove(oldIndicator);
+          }
+        });
+
+        existing.userData.hasPacmanSpawn = true;
+        existing.userData.pacmanSpawnRotation = currentRotation;
+        
+        const indicator = createPacman();
+        indicator.name = 'pacmanSpawnIndicator';
+        
+        let localX = 0;
+        let localZ = 0;
+        if (existing.userData.type === 'corner') {
+          const cornerOffset = 3.57 * (1 - Math.SQRT1_2);
+          localX = cornerOffset;
+          localZ = -cornerOffset;
+        }
+        
+        indicator.position.set(localX, 2.5, localZ);
+        indicator.scale.setScalar(0.32);
+        indicator.rotation.y = currentRotation - existing.rotation.y;
+        
+        existing.add(indicator);
       }
     }
+    setEditorDirty(true);
     return;
   }
 
@@ -3420,13 +3901,17 @@ function placePiece() {
   piece.rotation.y = currentRotation;
   piece.userData = { type: currentPieceType, rotation: currentRotation };
   editorMaze.add(piece);
+  setEditorDirty(true);
 }
 
 function deletePieceAtCursor() {
   const pos = getGridIntersection();
   if (!pos) return;
   const existing = editorMaze.children.find(c => c.position.x === pos.x && c.position.z === pos.z);
-  if (existing) editorMaze.remove(existing);
+  if (existing) {
+    editorMaze.remove(existing);
+    setEditorDirty(true);
+  }
 }
 
 // --- Export ---
@@ -3544,132 +4029,8 @@ document.querySelector('#btn-modal-import').addEventListener('click', () => {
   
   try {
     const data = JSON.parse(json);
-    
-    // --- Validation Step ---
-    if (!Array.isArray(data)) {
-      throw new Error("Imported data must be an array of pieces.");
-    }
-    
-    const validTypes = ['straight', 'corner', 'tjunction', 'crossroad', 'teleport', 'ghostchamber'];
-    let pacmanSpawnCount = 0;
-    let ghostChamberCount = 0;
-    
-    for (let i = 0; i < data.length; i++) {
-      const item = data[i];
-      if (!item.type || !validTypes.includes(item.type)) {
-        throw new Error(`Invalid or missing piece type at index ${i}: ${item.type}`);
-      }
-      if (!Array.isArray(item.position) || item.position.length !== 3) {
-        throw new Error(`Invalid position array at index ${i}. Must have 3 coordinates.`);
-      }
-      
-      const expectedX = Math.round(item.position[0] / TILE_SIZE) * TILE_SIZE;
-      const expectedZ = Math.round(item.position[2] / TILE_SIZE) * TILE_SIZE;
-      if (Math.abs(item.position[0] - expectedX) > 0.1 || Math.abs(item.position[1]) > 0.1 || Math.abs(item.position[2] - expectedZ) > 0.1) {
-        throw new Error(`Invalid position at index ${i}. Must be aligned to the grid (multiples of ${TILE_SIZE}) at Y=0.`);
-      }
-
-      if (typeof item.rotation !== 'number') {
-        throw new Error(`Invalid rotation at index ${i}. Must be a number.`);
-      }
-      
-      const checkOrthogonal = (rot) => {
-        const normalized = ((rot % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-        const remainder = normalized % (Math.PI / 2);
-        return remainder < 0.01 || Math.abs(remainder - (Math.PI / 2)) < 0.01;
-      };
-
-      if (!checkOrthogonal(item.rotation)) {
-        throw new Error(`Invalid rotation at index ${i}. Must be a multiple of 90 degrees (PI/2).`);
-      }
-
-      if (item.hasPacmanSpawn) {
-        pacmanSpawnCount++;
-        if (pacmanSpawnCount > 1) {
-          throw new Error("Multiple Pacman spawns detected. Only one is allowed.");
-        }
-        if (typeof item.pacmanSpawnRotation === 'number' && !checkOrthogonal(item.pacmanSpawnRotation)) {
-          throw new Error(`Invalid Pacman spawn rotation at index ${i}. Must be a multiple of 90 degrees.`);
-        }
-        if (item.hasPowerPellet) {
-          throw new Error(`Conflict at index ${i}: A tile cannot have both a Pacman spawn and a Power Pellet.`);
-        }
-      }
-
-      if (item.type === 'ghostchamber') {
-        ghostChamberCount++;
-        if (ghostChamberCount > 1) {
-          throw new Error("Multiple Ghost Chambers detected. Only one is allowed.");
-        }
-      }
-    }
-    
-    // Clear current maze ONLY after validation passes
-    while(editorMaze.children.length > 0) {
-      editorMaze.remove(editorMaze.children[0]);
-    }
-    
-    // Rebuild
-    data.forEach(item => {
-      const piece = createMazePiece(item.type);
-      piece.position.set(item.position[0], item.position[1], item.position[2]);
-      piece.rotation.y = item.rotation;
-      piece.userData = { 
-        type: item.type, 
-        rotation: item.rotation,
-        hasPowerPellet: item.hasPowerPellet || false,
-        hasPacmanSpawn: item.hasPacmanSpawn || false,
-        pacmanSpawnRotation: item.pacmanSpawnRotation || 0
-      };
-      
-      if (piece.userData.hasPowerPellet) {
-        const indicator = createPellet();
-        indicator.name = 'powerPelletIndicator';
-        
-        let localX = 0;
-        let localZ = 0;
-        if (piece.userData.type === 'corner') {
-          const cornerOffset = 3.57 * (1 - Math.SQRT1_2);
-          localX = cornerOffset;
-          localZ = -cornerOffset;
-        }
-        
-        indicator.position.set(localX, 2.5, localZ);
-        indicator.scale.set(0.4, 0.4, 0.4);
-        
-        // Make it visible through the glass in the editor
-        indicator.traverse(obj => {
-          if (obj.material) {
-            obj.material = obj.material.clone();
-            obj.material.depthTest = false;
-            obj.renderOrder = 998;
-          }
-        });
-        
-        piece.add(indicator);
-      }
-
-      if (piece.userData.hasPacmanSpawn) {
-        const indicator = createPacman();
-        indicator.name = 'pacmanSpawnIndicator';
-        
-        let localX = 0;
-        let localZ = 0;
-        if (piece.userData.type === 'corner') {
-          const cornerOffset = 3.57 * (1 - Math.SQRT1_2);
-          localX = cornerOffset;
-          localZ = -cornerOffset;
-        }
-        
-        indicator.position.set(localX, 2.5, localZ);
-        indicator.scale.setScalar(0.32);
-        indicator.rotation.y = piece.userData.pacmanSpawnRotation - piece.rotation.y;
-        
-        piece.add(indicator);
-      }
-      
-      editorMaze.add(piece);
-    });
+    validateMapData(data);
+    loadMapIntoEditor(data, { markDirty: true });
     
     document.querySelector('#import-modal').classList.remove('active');
     
@@ -3705,6 +4066,7 @@ document.querySelector('#btn-shift-map').addEventListener('click', () => {
   const cameraToggle = document.querySelector('.segmented-toggle');
   const zoomSlider = document.querySelector('#zoom-slider').parentElement;
   const exportImportContainer = document.querySelector('#btn-export').parentElement;
+  const saveButton = document.querySelector('#btn-save-map');
   
   if (isShiftMode) {
     btn.textContent = 'Cancel';
@@ -3717,6 +4079,7 @@ document.querySelector('#btn-shift-map').addEventListener('click', () => {
     if (cameraToggle) cameraToggle.style.display = 'none';
     if (zoomSlider) zoomSlider.style.display = 'none';
     if (exportImportContainer) exportImportContainer.style.display = 'none';
+    if (saveButton) saveButton.style.display = 'none';
     
     if (hotkeyList) {
       hotkeyList.innerHTML = `
@@ -3753,6 +4116,7 @@ document.querySelector('#btn-apply-shift').addEventListener('click', () => {
     c.position.add(offset);
   });
   editorMaze.position.set(0, 0, 0);
+  if (offset.lengthSq() > 0) setEditorDirty(true);
   exitShiftMode();
 });
 
@@ -3773,11 +4137,13 @@ function exitShiftMode() {
   const cameraToggle = document.querySelector('.segmented-toggle');
   const zoomSlider = document.querySelector('#zoom-slider').parentElement;
   const exportImportContainer = document.querySelector('#btn-export').parentElement;
+  const saveButton = document.querySelector('#btn-save-map');
   
   if (bottomBar) bottomBar.style.display = 'flex';
   if (cameraToggle) cameraToggle.style.display = 'flex';
   if (zoomSlider) zoomSlider.style.display = 'flex';
   if (exportImportContainer) exportImportContainer.style.display = 'flex';
+  if (saveButton) saveButton.style.display = '';
   
   if (hotkeyList) {
     hotkeyList.innerHTML = `

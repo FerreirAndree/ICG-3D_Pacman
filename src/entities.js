@@ -23,8 +23,9 @@ export function createPacman() {
     emissiveIntensity: 0.45,
     roughness: 0.32,
     metalness: 0.05,
-    transparent: true,
-    opacity: 1
+    transparent: false,
+    opacity: 1,
+    depthWrite: true
   });
   const upperShellMaterial = shellMaterial.clone();
   const eyeUniforms = {
@@ -83,8 +84,9 @@ export function createPacman() {
   const mouthMaterial = new THREE.MeshBasicMaterial({
     color: 0x010103,
     side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 1
+    transparent: false,
+    opacity: 1,
+    depthWrite: true
   });
 
   const deathUniforms = {
@@ -228,7 +230,6 @@ export function createPacman() {
 
   function resetPacmanVisualPose() {
     group.visible = true;
-    group.scale.copy(deathState.baseScale);
     setModelOpacity(1);
     upperGroup.visible = true;
     lowerGroup.visible = true;
