@@ -1,0 +1,962 @@
+[
+  {
+    "type": "ghostchamber",
+    "position": [
+      0,
+      0,
+      -18
+    ],
+    "rotation": 3.141592653589793,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      0,
+      0,
+      0
+    ],
+    "rotation": 6.283185307179586,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      18,
+      0,
+      0
+    ],
+    "rotation": 7.853981633974483,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -18,
+      0,
+      0
+    ],
+    "rotation": 10.995574287564276,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      18,
+      0,
+      -18
+    ],
+    "rotation": 10.995574287564276,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -18,
+      0,
+      -18
+    ],
+    "rotation": 14.137166941154069,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -18,
+      0,
+      -36
+    ],
+    "rotation": 29.845130209103047,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      18,
+      0,
+      -36
+    ],
+    "rotation": 32.986722862692844,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      0,
+      0,
+      -36
+    ],
+    "rotation": 32.986722862692844,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      18,
+      0,
+      -54
+    ],
+    "rotation": 42.411500823462234,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -18,
+      0,
+      -54
+    ],
+    "rotation": 53.40707511102652,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      36,
+      0,
+      -54
+    ],
+    "rotation": 58.11946409141122,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -36,
+      0,
+      -54
+    ],
+    "rotation": 62.83185307179591,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -36,
+      0,
+      -72
+    ],
+    "rotation": 65.9734457253857,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      36,
+      0,
+      -72
+    ],
+    "rotation": 65.9734457253857,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -18,
+      0,
+      -72
+    ],
+    "rotation": 69.11503837897548,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      18,
+      0,
+      -72
+    ],
+    "rotation": 69.11503837897548,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      0,
+      0,
+      -72
+    ],
+    "rotation": 70.68583470577038,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -18,
+      0,
+      -90
+    ],
+    "rotation": 72.25663103256527,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      18,
+      0,
+      -90
+    ],
+    "rotation": 73.82742735936016,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      36,
+      0,
+      -90
+    ],
+    "rotation": 73.82742735936016,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      54,
+      0,
+      -90
+    ],
+    "rotation": 78.53981633974483,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -54,
+      0,
+      -90
+    ],
+    "rotation": 78.53981633974483,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      -36,
+      0,
+      -90
+    ],
+    "rotation": 80.11061266653972,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      -54,
+      0,
+      -72
+    ],
+    "rotation": 80.11061266653972,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      54,
+      0,
+      -72
+    ],
+    "rotation": 80.11061266653972,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -72,
+      0,
+      -90
+    ],
+    "rotation": 80.11061266653972,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -72,
+      0,
+      -72
+    ],
+    "rotation": 80.11061266653972,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      72,
+      0,
+      -72
+    ],
+    "rotation": 83.2522053201295,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      72,
+      0,
+      -90
+    ],
+    "rotation": 84.8230016469244,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -72,
+      0,
+      -54
+    ],
+    "rotation": 87.96459430051418,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -54,
+      0,
+      -54
+    ],
+    "rotation": 89.53539062730907,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      54,
+      0,
+      -54
+    ],
+    "rotation": 92.67698328089885,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      72,
+      0,
+      -54
+    ],
+    "rotation": 95.81857593448863,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -54,
+      0,
+      -36
+    ],
+    "rotation": 100.53096491487331,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -36,
+      0,
+      -36
+    ],
+    "rotation": 103.67255756846309,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "teleport",
+    "position": [
+      -54,
+      0,
+      -18
+    ],
+    "rotation": 106.81415022205287,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      -36,
+      0,
+      -18
+    ],
+    "rotation": 106.81415022205287,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      54,
+      0,
+      -36
+    ],
+    "rotation": 108.38494654884776,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      36,
+      0,
+      -36
+    ],
+    "rotation": 111.52653920243755,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      36,
+      0,
+      -18
+    ],
+    "rotation": 111.52653920243755,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "teleport",
+    "position": [
+      54,
+      0,
+      -18
+    ],
+    "rotation": 116.23892818282222,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      36,
+      0,
+      0
+    ],
+    "rotation": 116.23892818282222,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      -36,
+      0,
+      0
+    ],
+    "rotation": 116.23892818282222,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      -36,
+      0,
+      18
+    ],
+    "rotation": 119.380520836412,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -18,
+      0,
+      18
+    ],
+    "rotation": 119.380520836412,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      18,
+      0,
+      18
+    ],
+    "rotation": 119.380520836412,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      0,
+      0,
+      18
+    ],
+    "rotation": 122.52211349000179,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -72,
+      0,
+      18
+    ],
+    "rotation": 124.09290981679668,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      -54,
+      0,
+      18
+    ],
+    "rotation": 124.09290981679668,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -72,
+      0,
+      36
+    ],
+    "rotation": 125.66370614359157,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -54,
+      0,
+      36
+    ],
+    "rotation": 128.80529879718136,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -54,
+      0,
+      54
+    ],
+    "rotation": 131.94689145077115,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -36,
+      0,
+      54
+    ],
+    "rotation": 133.51768777756604,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -36,
+      0,
+      36
+    ],
+    "rotation": 136.65928043115582,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -72,
+      0,
+      54
+    ],
+    "rotation": 136.65928043115582,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -72,
+      0,
+      72
+    ],
+    "rotation": 138.2300767579507,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      -54,
+      0,
+      72
+    ],
+    "rotation": 139.8008730847456,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      -36,
+      0,
+      72
+    ],
+    "rotation": 139.8008730847456,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      0,
+      0,
+      72
+    ],
+    "rotation": 144.51326206513028,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      -18,
+      0,
+      36
+    ],
+    "rotation": 147.65485471872006,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      -18,
+      0,
+      72
+    ],
+    "rotation": 149.22565104551495,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      -18,
+      0,
+      54
+    ],
+    "rotation": 150.79644737230984,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      0,
+      0,
+      54
+    ],
+    "rotation": 158.6504290062843,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      0,
+      0,
+      36
+    ],
+    "rotation": 158.6504290062843,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "crossroad",
+    "position": [
+      36,
+      0,
+      18
+    ],
+    "rotation": 158.6504290062843,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      54,
+      0,
+      18
+    ],
+    "rotation": 158.6504290062843,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      72,
+      0,
+      18
+    ],
+    "rotation": 166.50441064025875,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      72,
+      0,
+      36
+    ],
+    "rotation": 171.21679962064343,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      54,
+      0,
+      36
+    ],
+    "rotation": 174.3583922742332,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      54,
+      0,
+      54
+    ],
+    "rotation": 182.21237390820767,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      72,
+      0,
+      54
+    ],
+    "rotation": 185.35396656179745,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      72,
+      0,
+      72
+    ],
+    "rotation": 190.06635554218212,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      54,
+      0,
+      72
+    ],
+    "rotation": 190.06635554218212,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      36,
+      0,
+      72
+    ],
+    "rotation": 190.06635554218212,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "straight",
+    "position": [
+      18,
+      0,
+      72
+    ],
+    "rotation": 190.06635554218212,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      18,
+      0,
+      36
+    ],
+    "rotation": 191.637151868977,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      18,
+      0,
+      54
+    ],
+    "rotation": 196.3495408493617,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "tjunction",
+    "position": [
+      36,
+      0,
+      36
+    ],
+    "rotation": 196.3495408493617,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  },
+  {
+    "type": "corner",
+    "position": [
+      36,
+      0,
+      54
+    ],
+    "rotation": 201.06192982974636,
+    "hasPowerPellet": false,
+    "hasPacmanSpawn": false,
+    "pacmanSpawnRotation": 0
+  }
+]

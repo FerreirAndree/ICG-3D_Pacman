@@ -14,6 +14,7 @@ import { buildMazeGraph, EXPERIMENTAL_GAME_MAP, getAbsoluteDirections as getGrap
 import { EntityController } from './pacmanController.js';
 import { PelletManager, PELLET_TYPES } from './pelletManager.js';
 import { GhostAIController } from './ghostAIController.js';
+import { navigateTo, registerRoutes } from './navigation.js';
 import './style.css';
 
 const scene = new THREE.Scene();
@@ -79,14 +80,14 @@ const uiHtml = `
         <div class="control-label" style="text-align: center;">Score: <span id="score-counter" style="color: #00ffaa; font-weight: bold;">0</span></div>
         <div id="game-state-label" class="control-label" style="display: none; color: #ff4444; font-weight: bold; text-align: center;">Game Over</div>
         <div style="display: flex; gap: 10px; margin-top: -5px;">
-          <button class="btn" id="btn-reset-pellets" style="flex: 1; padding: 6px;">Reset Pellets</button>
+          <button class="btn dev-only-control" id="btn-reset-pellets" style="flex: 1; padding: 6px;">Reset Pellets</button>
           <button class="btn" id="btn-reset-run" style="flex: 1; padding: 6px;">Restart Run</button>
         </div>
-        <button class="btn" id="btn-swap-puppet" style="margin-top: -5px; padding: 6px; background: rgba(255, 204, 0, 0.2); border-color: rgba(255, 204, 0, 0.3); color: #ffcc00;">Control: Pacman</button>
-        <button class="btn" id="btn-cycle-ghost-count" style="margin-top: -5px; padding: 6px;">Ghosts: 4</button>
-        <button class="btn" id="btn-toggle-ghost-ai" style="margin-top: -5px; padding: 6px;">Ghost AI: Off</button>
-        <button class="btn" id="btn-toggle-collisions" style="margin-top: -5px; padding: 6px;">Collisions: On</button>
-        <button class="btn" id="btn-toggle-jumpscare" style="margin-top: -5px; padding: 6px;">Jumpscare: Off</button>
+        <button class="btn dev-only-control" id="btn-swap-puppet" style="margin-top: -5px; padding: 6px; background: rgba(255, 204, 0, 0.2); border-color: rgba(255, 204, 0, 0.3); color: #ffcc00;">Control: Pacman</button>
+        <button class="btn dev-only-control" id="btn-cycle-ghost-count" style="margin-top: -5px; padding: 6px;">Ghosts: 4</button>
+        <button class="btn dev-only-control" id="btn-toggle-ghost-ai" style="margin-top: -5px; padding: 6px;">Ghost AI: Off</button>
+        <button class="btn dev-only-control" id="btn-toggle-collisions" style="margin-top: -5px; padding: 6px;">Collisions: On</button>
+        <button class="btn dev-only-control" id="btn-toggle-jumpscare" style="margin-top: -5px; padding: 6px;">Jumpscare: Off</button>
         <div class="hotkey-list">
           <div class="hotkey-item"><span>Move</span> <span class="hotkey-key">WASD / Arrows</span></div>
           <div class="hotkey-item"><span>Look Back</span> <span class="hotkey-key">Hold Space</span></div>
@@ -126,6 +127,32 @@ const uiHtml = `
         </div>
       </div>
     </div>
+  </div>
+
+  <div class="showroom-nav" id="showroom-nav" aria-label="Showroom navigation">
+    <button class="showroom-action btn-blue" id="btn-showroom-menu">
+      <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
+        <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+      <span>Menu</span>
+    </button>
+    <button class="showroom-action btn-yellow" id="btn-showroom-play">
+      <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M13 3C15.1523 3 17.1281 3.7555 18.6768 5.01576L20.124 6.46299L18.8288 7.75818L18.828 7.75738L14.5854 12L18.2236 15.6383L18.2224 15.6396L20.1273 17.5445L18.7144 18.9575L18.7122 18.9553C17.1583 20.2329 15.1687 21 13 21C8.02944 21 4 16.9706 4 12C4 7.02944 8.02944 3 13 3ZM11.7569 12L17.2893 17.5323C16.1044 18.4523 14.6162 19 13 19C9.13401 19 6 15.866 6 12C6 8.13401 9.13401 5 13 5C14.6162 5 16.1045 5.54772 17.2893 6.46768L11.7569 12Z" fill="currentColor"/>
+      </svg>
+      <span>Play</span>
+    </button>
+    <button class="showroom-action btn-blue" id="btn-showroom-create">
+      <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2" />
+        <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+        <line x1="2" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        <line x1="18" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        <line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </svg>
+      <span>Create</span>
+    </button>
   </div>
 
   <div class="editor-ui" id="editor-ui">
@@ -292,6 +319,47 @@ const uiHtml = `
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="route-overlay" id="map-select-screen">
+    <div class="route-screen">
+      <div class="route-screen-header">
+        <button class="route-back-button" id="btn-map-select-back" aria-label="Back to menu">Back</button>
+        <div>
+          <p class="route-kicker">Game Setup</p>
+          <h2>Choose Map</h2>
+        </div>
+      </div>
+      <button class="route-map-option" id="btn-map-select-default">
+        <span class="route-map-title">Default Maze</span>
+        <span class="route-map-meta">Current experimental game map</span>
+        <span class="route-map-action">Start</span>
+      </button>
+      <button class="route-map-option route-map-option-dev" id="btn-map-select-dev">
+        <span class="route-map-title">Default Maze - Dev Tools</span>
+        <span class="route-map-meta">Same map with AI, collision, ghost count, and debug controls</span>
+        <span class="route-map-action">Start Dev</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="route-overlay" id="map-manager-screen">
+    <div class="route-screen">
+      <div class="route-screen-header">
+        <button class="route-back-button" id="btn-map-manager-back" aria-label="Back to menu">Back</button>
+        <div>
+          <p class="route-kicker">Map Maker</p>
+          <h2>Your Maps</h2>
+        </div>
+      </div>
+      <div class="route-map-option route-map-option-static">
+        <span class="route-map-title">Current Editor Map</span>
+        <span class="route-map-meta">Uses the map currently assembled in the editor, or starts from an empty workspace</span>
+      </div>
+      <button class="landing-action btn-blue route-primary-action" id="btn-map-create-new">
+        <span>Create New Map</span>
+      </button>
     </div>
   </div>
 `;
@@ -1574,59 +1642,93 @@ gridHelper.visible = false;
 scene.add(gridHelper);
 
 // --- Mode Management ---
-function toggleMode() {
-  if (isGameMode) {
-    exitGameMode();
-  }
+function enterEditorMode() {
+  if (isEditorMode) return;
 
-  isEditorMode = !isEditorMode;
-  
+  isEditorMode = true;
+
   const statusTab = document.querySelector('#mode-status');
   const toggleBtn = document.querySelector('#btn-toggle-mode');
   const gameBtn = document.querySelector('#btn-toggle-game');
   const editorUi = document.querySelector('#editor-ui');
   const editorControls = document.querySelector('#editor-only-controls');
 
-  isEditorMode ? appContainer.classList.add('editor-active') : appContainer.classList.remove('editor-active');
+  appContainer.classList.add('editor-active');
+  appContainer.classList.remove('showroom-active');
+  appContainer.classList.remove('route-overlay-active');
   
-  statusTab.textContent = isEditorMode ? 'Editor' : 'Showcase';
-  toggleBtn.textContent = isEditorMode ? 'Close Editor' : 'Open Editor';
-  editorUi.classList.toggle('active', isEditorMode);
-  editorControls.style.display = isEditorMode ? 'flex' : 'none';
-  gameBtn.style.display = isEditorMode ? 'none' : 'block';
+  statusTab.textContent = 'Editor';
+  toggleBtn.textContent = 'Close Editor';
+  editorUi.classList.add('active');
+  editorControls.style.display = 'flex';
+  gameBtn.style.display = 'none';
   
-  gridHelper.visible = isEditorMode;
-  showcase.visible = !isEditorMode;
-  editorMaze.visible = isEditorMode;
+  gridHelper.visible = true;
+  showcase.visible = false;
+  editorMaze.visible = true;
+  gameMaze.visible = false;
 
   // Studio Lighting Boost
-  scene.fog.density = isEditorMode ? 0 : 0.009;
-  ambient.intensity = isEditorMode ? 2.8 : 1.4;
+  scene.fog.density = 0;
+  ambient.intensity = 2.8;
 
-  if (isEditorMode) {
-    updateGhostPiece();
-    controls.maxPolarAngle = Math.PI / 2;
-    controls.minDistance = 5;
-    
-    // Switch to Editor Camera
-    camera.position.set(...EDITOR_VIEW.pos);
-    controls.target.set(...EDITOR_VIEW.target);
-  } else {
-    removeGhostPiece();
-    if (isBirdseye) toggleCamera(); 
-    controls.maxPolarAngle = Math.PI / 2.12;
-    controls.minDistance = 18;
-
-    // Return to Gallery Camera
-    camera.position.set(...GALLERY_VIEW.pos);
-    controls.target.set(...GALLERY_VIEW.target);
-  }
+  updateGhostPiece();
+  controls.enabled = true;
+  controls.enableRotate = true;
+  controls.maxPolarAngle = Math.PI / 2;
+  controls.minDistance = 5;
+  camera.fov = DEFAULT_CAMERA_FOV;
+  camera.updateProjectionMatrix();
+  
+  // Switch to Editor Camera
+  camera.position.set(...EDITOR_VIEW.pos);
+  controls.target.set(...EDITOR_VIEW.target);
 }
 
-function enterGameMode() {
-  if (isEditorMode) {
-    toggleMode();
+function exitEditorMode() {
+  if (!isEditorMode) return;
+
+  isEditorMode = false;
+
+  const statusTab = document.querySelector('#mode-status');
+  const toggleBtn = document.querySelector('#btn-toggle-mode');
+  const gameBtn = document.querySelector('#btn-toggle-game');
+  const editorUi = document.querySelector('#editor-ui');
+  const editorControls = document.querySelector('#editor-only-controls');
+
+  appContainer.classList.remove('editor-active');
+  statusTab.textContent = 'Showcase';
+  toggleBtn.textContent = 'Open Editor';
+  editorUi.classList.remove('active');
+  editorControls.style.display = 'none';
+  gameBtn.style.display = 'block';
+  
+  gridHelper.visible = false;
+  showcase.visible = true;
+  editorMaze.visible = false;
+
+  removeGhostPiece();
+  if (isBirdseye) {
+    toggleCamera('3d');
   }
+  controls.maxPolarAngle = Math.PI / 2.12;
+  controls.minDistance = 18;
+
+  // Return to Gallery Camera
+  scene.fog.density = 0.009;
+  ambient.intensity = 1.4;
+  camera.fov = DEFAULT_CAMERA_FOV;
+  camera.updateProjectionMatrix();
+  camera.position.set(...GALLERY_VIEW.pos);
+  controls.target.set(...GALLERY_VIEW.target);
+}
+
+function setDevControlsVisible(visible) {
+  appContainer.classList.toggle('dev-tools-active', visible);
+}
+
+function enterGameMode(options = {}) {
+  const isDevMode = Boolean(options.dev);
 
   isGameMode = true;
   isGameLookBackActive = false;
@@ -1645,6 +1747,9 @@ function enterGameMode() {
   isLevelComplete = false;
   score = 0;
   appContainer.classList.add('game-active');
+  appContainer.classList.remove('showroom-active');
+  appContainer.classList.remove('route-overlay-active');
+  setDevControlsVisible(isDevMode);
 
   const statusTab = document.querySelector('#mode-status');
   const gameBtn = document.querySelector('#btn-toggle-game');
@@ -1689,6 +1794,8 @@ function enterGameMode() {
 }
 
 function exitGameMode() {
+  if (!isGameMode) return;
+
   isGameMode = false;
   isGameLookBackActive = false;
   previousGameLookBackState = false;
@@ -1702,6 +1809,7 @@ function exitGameMode() {
   isGameOver = false;
   isLevelComplete = false;
   appContainer.classList.remove('game-active');
+  setDevControlsVisible(false);
 
   const statusTab = document.querySelector('#mode-status');
   const gameBtn = document.querySelector('#btn-toggle-game');
@@ -1728,14 +1836,6 @@ function exitGameMode() {
   controls.minDistance = 18;
   camera.position.set(...GALLERY_VIEW.pos);
   controls.target.set(...GALLERY_VIEW.target);
-}
-
-function toggleGameMode() {
-  if (isGameMode) {
-    exitGameMode();
-  } else {
-    enterGameMode();
-  }
 }
 
 function getMenuTrackPosition(d) {
@@ -1965,35 +2065,78 @@ function resizeMenu3D() {
   menuRenderer.setSize(width, height, false);
 }
 
-function closeLandingMenu() {
+function enterMenuScreen() {
+  appContainer.classList.add('landing-active');
+  appContainer.classList.remove('showroom-active');
+  appContainer.classList.remove('route-overlay-active');
+  document.querySelector('#mode-status').textContent = 'Showcase';
+  showcase.visible = true;
+  editorMaze.visible = false;
+  gameMaze.visible = false;
+  gridHelper.visible = false;
+  controls.enabled = true;
+  controls.enableRotate = true;
+  controls.maxPolarAngle = Math.PI / 2.12;
+  controls.minDistance = 18;
+  scene.fog.density = 0.009;
+  ambient.intensity = 1.4;
+  camera.fov = DEFAULT_CAMERA_FOV;
+  camera.updateProjectionMatrix();
+  camera.position.set(...GALLERY_VIEW.pos);
+  controls.target.set(...GALLERY_VIEW.target);
+}
+
+function exitMenuScreen() {
   appContainer.classList.remove('landing-active');
 }
 
-function openShowroomFromMenu() {
-  closeLandingMenu();
-  if (isGameMode) {
-    exitGameMode();
-  }
-  if (isEditorMode) {
-    toggleMode();
-  }
+function enterShowroomScreen() {
+  appContainer.classList.remove('landing-active');
+  appContainer.classList.remove('route-overlay-active');
+  appContainer.classList.add('showroom-active');
+  document.querySelector('#mode-status').textContent = 'Showcase';
+  showcase.visible = true;
+  editorMaze.visible = false;
+  gameMaze.visible = false;
+  gridHelper.visible = false;
+  controls.enabled = true;
+  controls.enableRotate = true;
+  controls.maxPolarAngle = Math.PI / 2.12;
+  controls.minDistance = 18;
+  scene.fog.density = 0.009;
+  ambient.intensity = 1.4;
+  camera.fov = DEFAULT_CAMERA_FOV;
+  camera.updateProjectionMatrix();
+  camera.position.set(...GALLERY_VIEW.pos);
+  controls.target.set(...GALLERY_VIEW.target);
 }
 
-function openEditorFromMenu() {
-  closeLandingMenu();
-  if (isGameMode) {
-    exitGameMode();
-  }
-  if (!isEditorMode) {
-    toggleMode();
-  }
+function exitShowroomScreen() {
+  appContainer.classList.remove('showroom-active');
 }
 
-function openGameFromMenu() {
-  closeLandingMenu();
-  if (!isGameMode) {
-    enterGameMode();
-  }
+function enterMapSelectScreen() {
+  enterShowroomScreen();
+  appContainer.classList.add('route-overlay-active');
+  document.querySelector('#map-select-screen').classList.add('active');
+  appContainer.classList.remove('showroom-active');
+}
+
+function exitMapSelectScreen() {
+  appContainer.classList.remove('route-overlay-active');
+  document.querySelector('#map-select-screen').classList.remove('active');
+}
+
+function enterMapManagerScreen() {
+  enterShowroomScreen();
+  appContainer.classList.add('route-overlay-active');
+  document.querySelector('#map-manager-screen').classList.add('active');
+  appContainer.classList.remove('showroom-active');
+}
+
+function exitMapManagerScreen() {
+  appContainer.classList.remove('route-overlay-active');
+  document.querySelector('#map-manager-screen').classList.remove('active');
 }
 
 function getGameInputIntent(key) {
@@ -2154,11 +2297,52 @@ zoomSlider.addEventListener('input', (e) => {
   camera.position.copy(controls.target).add(direction.multiplyScalar(dist));
 });
 
-document.querySelector('#btn-toggle-mode').addEventListener('click', toggleMode);
-document.querySelector('#btn-toggle-game').addEventListener('click', toggleGameMode);
-document.querySelector('#btn-menu-start').addEventListener('click', openGameFromMenu);
-document.querySelector('#btn-menu-editor').addEventListener('click', openEditorFromMenu);
-document.querySelector('#btn-menu-showroom').addEventListener('click', openShowroomFromMenu);
+document.querySelector('#btn-toggle-mode').addEventListener('click', () => {
+  navigateTo(isEditorMode ? '/showroom' : '/maps');
+});
+document.querySelector('#btn-toggle-game').addEventListener('click', () => {
+  navigateTo(isGameMode ? '/menu' : '/play/maps');
+});
+document.querySelector('#btn-menu-start').addEventListener('click', () => navigateTo('/play/maps'));
+document.querySelector('#btn-menu-editor').addEventListener('click', () => navigateTo('/maps'));
+document.querySelector('#btn-menu-showroom').addEventListener('click', () => navigateTo('/showroom'));
+document.querySelector('#btn-showroom-menu').addEventListener('click', () => navigateTo('/menu'));
+document.querySelector('#btn-showroom-play').addEventListener('click', () => navigateTo('/play/maps'));
+document.querySelector('#btn-showroom-create').addEventListener('click', () => navigateTo('/maps'));
+document.querySelector('#btn-map-select-back').addEventListener('click', () => navigateTo('/menu'));
+document.querySelector('#btn-map-select-default').addEventListener('click', () => navigateTo('/game'));
+document.querySelector('#btn-map-select-dev').addEventListener('click', () => navigateTo('/game', { query: { dev: 1 } }));
+document.querySelector('#btn-map-manager-back').addEventListener('click', () => navigateTo('/menu'));
+document.querySelector('#btn-map-create-new').addEventListener('click', () => navigateTo('/editor'));
+
+registerRoutes({
+  '/menu': {
+    enter: enterMenuScreen,
+    exit: exitMenuScreen
+  },
+  '/showroom': {
+    enter: enterShowroomScreen,
+    exit: exitShowroomScreen
+  },
+  '/play/maps': {
+    enter: enterMapSelectScreen,
+    exit: exitMapSelectScreen
+  },
+  '/game': {
+    enter: (route) => enterGameMode({ dev: route.query.dev === '1' || route.query.dev === 'true' }),
+    update: (route) => setDevControlsVisible(route.query.dev === '1' || route.query.dev === 'true'),
+    exit: exitGameMode
+  },
+  '/maps': {
+    enter: enterMapManagerScreen,
+    exit: exitMapManagerScreen
+  },
+  '/editor': {
+    enter: enterEditorMode,
+    exit: exitEditorMode
+  }
+}, { fallbackRoute: '/menu' });
+
 document.querySelector('#btn-reset-pellets').addEventListener('click', () => {
   if (pelletManager) {
     pelletManager.reset();
@@ -2458,14 +2642,14 @@ window.addEventListener('keydown', (e) => {
   if (isGameMode) {
     if (isGameOver || isLevelComplete) {
       if (key === 'escape') {
-        exitGameMode();
+        navigateTo('/menu');
       }
       return;
     }
 
     if (isCaptureResolving()) {
       if (key === 'escape') {
-        exitGameMode();
+        navigateTo('/menu');
       }
       return;
     }
@@ -2497,7 +2681,7 @@ window.addEventListener('keydown', (e) => {
     }
 
     if (key === 'escape') {
-      exitGameMode();
+      navigateTo('/menu');
     }
 
     return;
