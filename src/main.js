@@ -91,7 +91,7 @@ const uiHtml = `
         <div class="hotkey-list">
           <div class="hotkey-item"><span>Move</span> <span class="hotkey-key">WASD / Arrows</span></div>
           <div class="hotkey-item"><span>Look Back</span> <span class="hotkey-key">Hold Space</span></div>
-          <div class="hotkey-item"><span>Swap</span> <span class="hotkey-key">Tab</span></div>
+          <div class="hotkey-item dev-only-control"><span>Swap</span> <span class="hotkey-key">Tab</span></div>
           <div class="hotkey-item"><span>Exit</span> <span class="hotkey-key">Esc</span></div>
         </div>
       </div>
@@ -408,6 +408,30 @@ const uiHtml = `
       <div class="map-manager-grid" id="map-manager-grid"></div>
     </div>
   </div>
+  <div class="game-hud" id="game-hud">
+    <svg width="0" height="0" style="position:absolute">
+      <defs>
+        <radialGradient id="pacman3dGrad" cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stop-color="#fff5a0" />
+          <stop offset="25%" stop-color="#ffd91f" />
+          <stop offset="75%" stop-color="#cc9a00" />
+          <stop offset="100%" stop-color="#664d00" />
+        </radialGradient>
+      </defs>
+    </svg>
+    <div class="game-hud-lives" id="game-hud-lives"></div>
+    <div class="game-start-overlay" id="game-start-overlay" aria-hidden="true">
+      <div class="game-start-modal">
+        <h2 class="game-start-title">Controls</h2>
+        <div class="game-start-commands">
+          <div><span>Move</span><strong>WASD / Arrows</strong></div>
+          <div><span>Look back</span><strong>Hold Space</strong></div>
+          <div><span>Exit</span><strong>Esc</strong></div>
+        </div>
+        <button class="game-start-button" id="btn-game-start" type="button">Start</button>
+      </div>
+    </div>
+  </div>
 
   <div class="editor-toast" id="editor-toast"></div>
 `;
@@ -495,6 +519,7 @@ let activePuppet = 'pacman';
 let pacmanSpawnState = null;
 let pelletManager = new PelletManager(gameMaze);
 let isGameMode = false;
+let isGameStartOverlayActive = false;
 let isGameLookBackActive = false;
 let previousGameLookBackState = false;
 let isJumpscareMode = false;
@@ -802,6 +827,24 @@ function updateLivesUi() {
     gameStateLabel.style.display = (isGameOver || isLevelComplete) ? 'block' : 'none';
     gameStateLabel.textContent = isLevelComplete ? 'Level Complete' : 'Game Over';
     gameStateLabel.style.color = isLevelComplete ? '#00ffaa' : '#ff4444';
+  }
+
+  // Update HUD lives icons
+  const hudLives = document.querySelector('#game-hud-lives');
+  if (hudLives) {
+    hudLives.innerHTML = '';
+    for (let i = 0; i < livesRemaining; i++) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.classList.add('hud-life-icon');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('width', '42');
+      svg.setAttribute('height', '42');
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', 'M12 12 L20.66 7 A10 10 0 1 0 20.66 17 Z');
+      path.setAttribute('fill', 'url(#pacman3dGrad)');
+      svg.appendChild(path);
+      hudLives.appendChild(svg);
+    }
   }
 }
 
@@ -2261,18 +2304,28 @@ function setDevControlsVisible(visible) {
   appContainer.classList.toggle('dev-tools-active', visible);
 }
 
+function setGameStartOverlayVisible(visible) {
+  isGameStartOverlayActive = Boolean(visible);
+  const overlay = document.querySelector('#game-start-overlay');
+  if (!overlay) return;
+
+  overlay.classList.toggle('active', isGameStartOverlayActive);
+  overlay.setAttribute('aria-hidden', isGameStartOverlayActive ? 'false' : 'true');
+}
+
 function enterGameMode(options = {}) {
   const isDevMode = Boolean(options.dev);
   const requestedGhostCount = Number(options.ghostCount);
 
   isGameMode = true;
+  isGameStartOverlayActive = false;
   isGameLookBackActive = false;
   previousGameLookBackState = false;
   isJumpscareMode = Boolean(options.jumpscare);
   if (Number.isInteger(requestedGhostCount)) {
     activeGhostCount = THREE.MathUtils.clamp(requestedGhostCount, 1, GHOST_DEFINITIONS.length);
   }
-  forEachGhost((entry) => entry.ai.setEnabled(false));
+  const shouldStartGhostAi = !isDevMode;
   areCaptureCollisionsEnabled = true;
   captureResolveTimer = 0;
   powerPelletTimer = 0;
@@ -2300,7 +2353,6 @@ function enterGameMode(options = {}) {
   gameControls.style.display = 'flex';
   updateJumpscareButton();
   updateCollisionsButton();
-  updateGhostAiButton();
   updateGhostCountButton();
   updateLivesUi();
   updateScoreUi();
@@ -2320,6 +2372,13 @@ function enterGameMode(options = {}) {
   controls.enableRotate = false;
 
   buildGameMaze();
+  forEachGhost((entry) => {
+    entry.ai.setEnabled(shouldStartGhostAi);
+    if (shouldStartGhostAi) {
+      prepareGhostHouseRelease(entry);
+    }
+  });
+  updateGhostAiButton();
 
   gameCameraState.forward.copy(activeController.getFollowDirection());
   gameCameraState.reverseHoldForward.copy(gameCameraState.forward);
@@ -2329,12 +2388,14 @@ function enterGameMode(options = {}) {
   gameCameraState.reversalTimer = 0;
   gameCameraState.reverseSnapFramesRemaining = 0;
   updateGameCamera(1, true);
+  setGameStartOverlayVisible(!isDevMode);
 }
 
 function exitGameMode() {
   if (!isGameMode) return;
 
   isGameMode = false;
+  setGameStartOverlayVisible(false);
   isGameLookBackActive = false;
   previousGameLookBackState = false;
   isJumpscareMode = false;
@@ -3353,6 +3414,10 @@ document.querySelector('#btn-reset-run').addEventListener('click', () => {
   restartGameRun();
 });
 
+document.querySelector('#btn-game-start').addEventListener('click', () => {
+  setGameStartOverlayVisible(false);
+});
+
 document.querySelector('#btn-cycle-ghost-count').addEventListener('click', (e) => {
   e.target.blur();
   if (!isGameMode) return;
@@ -3637,6 +3702,18 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (isGameMode) {
+    if (isGameStartOverlayActive) {
+      if (key === 'escape') {
+        navigateTo('/menu');
+      } else if (key === 'enter' || key === ' ') {
+        e.preventDefault();
+        setGameStartOverlayVisible(false);
+      } else {
+        e.preventDefault();
+      }
+      return;
+    }
+
     if (isGameOver || isLevelComplete) {
       if (key === 'escape') {
         navigateTo('/menu');
@@ -3673,6 +3750,7 @@ window.addEventListener('keydown', (e) => {
 
     if (key === 'tab') {
       e.preventDefault();
+      if (!appContainer.classList.contains('dev-tools-active')) return;
       document.querySelector('#btn-swap-puppet')?.click();
       return;
     }
@@ -4314,7 +4392,14 @@ function animate() {
   }
 
   if (isGameMode && activeController) {
-    if (isGameOver || isLevelComplete) {
+    if (isGameStartOverlayActive) {
+      if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime, deltaTime);
+      forEachGhost((entry) => {
+        if (entry.model.visible && entry.model.userData.update) entry.model.userData.update(elapsedTime);
+      });
+      pelletManager.update(elapsedTime);
+      updateGameCamera(deltaTime, false);
+    } else if (isGameOver || isLevelComplete) {
       if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime, deltaTime);
       forEachGhost((entry) => {
         if (entry.model.visible && entry.model.userData.update) entry.model.userData.update(elapsedTime);
