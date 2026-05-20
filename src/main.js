@@ -196,7 +196,11 @@ const uiHtml = `
   </div>
 
   <button class="editor-save-fab" id="btn-save-map" type="button">
-    <span class="editor-save-kicker">Editor Slot</span>
+    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+      <polyline points="17 21 17 13 7 13 7 21"></polyline>
+      <polyline points="7 3 7 8 15 8"></polyline>
+    </svg>
     <span class="editor-save-label">Save Map</span>
   </button>
 
@@ -528,6 +532,7 @@ let editorSession = {
 };
 let isEditorDirty = false;
 let pendingSaveModalPayload = null;
+let pendingDiscardAction = null;
 
 // --- 3D Landing Menu Variables ---
 let menuScene = null;
@@ -1438,12 +1443,40 @@ function openSaveNameModal(source, suggestedName) {
   input.value = suggestedName;
   errorEl.textContent = '';
   cancelBtn.style.display = '';
+  cancelBtn.textContent = 'Cancel';
   confirmBtn.textContent = 'Save Map';
   modal.classList.add('active');
   requestAnimationFrame(() => {
     input.focus();
     input.select();
   });
+}
+
+function openEditorDiscardConfirmation(onConfirm) {
+  const modal = document.querySelector('#editor-save-modal');
+  const eyebrow = document.querySelector('#editor-save-modal-eyebrow');
+  const titleEl = document.querySelector('#editor-save-modal-title');
+  const messageEl = document.querySelector('#editor-save-modal-message');
+  const inputWrap = document.querySelector('#editor-save-input-wrap');
+  const input = document.querySelector('#editor-save-name-input');
+  const errorEl = document.querySelector('#editor-save-modal-error');
+  const cancelBtn = document.querySelector('#btn-editor-save-cancel');
+  const confirmBtn = document.querySelector('#btn-editor-save-confirm');
+  if (!modal || !titleEl || !messageEl || !inputWrap || !input || !errorEl || !cancelBtn || !confirmBtn) return;
+
+  pendingDiscardAction = onConfirm;
+  modal.dataset.variant = 'confirm-discard';
+  eyebrow.textContent = 'Unsaved Changes';
+  titleEl.textContent = 'Discard Changes?';
+  messageEl.textContent = 'You have unsaved changes. If you close the editor, these changes will be lost.';
+  inputWrap.style.display = 'none';
+  input.value = '';
+  errorEl.textContent = '';
+  cancelBtn.style.display = '';
+  cancelBtn.textContent = 'Cancel';
+  confirmBtn.textContent = 'Discard';
+  modal.classList.add('active');
+  confirmBtn.focus();
 }
 
 function updateEditorSaveUi() {
@@ -3164,7 +3197,13 @@ zoomSlider.addEventListener('input', (e) => {
 });
 
 document.querySelector('#btn-toggle-mode').addEventListener('click', () => {
-  navigateTo(isEditorMode ? '/showroom' : '/maps');
+  if (isEditorMode && isEditorDirty) {
+    openEditorDiscardConfirmation(() => {
+      navigateTo('/showroom');
+    });
+  } else {
+    navigateTo(isEditorMode ? '/showroom' : '/maps');
+  }
 });
 document.querySelector('#btn-toggle-game').addEventListener('click', () => {
   navigateTo(isGameMode ? '/menu' : '/play/maps');
@@ -3216,6 +3255,14 @@ document.querySelector('#btn-save-map').addEventListener('click', saveCurrentEdi
 document.querySelector('#btn-editor-save-cancel').addEventListener('click', closeEditorSaveModal);
 document.querySelector('#btn-editor-save-confirm').addEventListener('click', () => {
   const modal = document.querySelector('#editor-save-modal');
+  if (modal?.dataset.variant === 'confirm-discard') {
+    closeEditorSaveModal();
+    if (pendingDiscardAction) {
+      pendingDiscardAction();
+      pendingDiscardAction = null;
+    }
+    return;
+  }
   if (modal?.dataset.variant !== 'save') {
     closeEditorSaveModal();
     return;
