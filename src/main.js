@@ -368,21 +368,37 @@ const uiHtml = `
   </div>
 
   <div class="route-overlay" id="map-manager-screen">
-    <div class="route-screen">
+    <div class="route-screen map-manager">
       <div class="route-screen-header">
-        <button class="route-back-button" id="btn-map-manager-back" aria-label="Back to menu">Back</button>
+        <button class="route-back-button route-icon-button" id="btn-map-manager-back" aria-label="Back to menu">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 5L8 12L15 19" />
+          </svg>
+        </button>
         <div>
-          <p class="route-kicker">Map Maker</p>
           <h2>Your Maps</h2>
         </div>
       </div>
-      <div class="route-map-option route-map-option-static">
-        <span class="route-map-title">Current Editor Map</span>
-        <span class="route-map-meta">Uses the map currently assembled in the editor, or starts from an empty workspace</span>
+      <div class="map-manager-grid">
+        <button class="manager-map-card" id="btn-map-edit-current">
+          <canvas class="map-thumbnail" id="manager-current-map-thumbnail" width="320" height="320" aria-hidden="true"></canvas>
+          <span class="map-card-name">Classic</span>
+          <span class="manager-card-hover">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" />
+              <path d="M14 7l3 3" />
+            </svg>
+          </span>
+        </button>
+        <button class="manager-create-card" id="btn-map-create-new">
+          <span class="manager-plus">+</span>
+          <span class="manager-create-label">New Map</span>
+        </button>
+        <button class="manager-map-card disabled" disabled>
+          <canvas class="map-thumbnail" id="manager-empty-map-thumbnail" width="320" height="320" aria-hidden="true"></canvas>
+          <span class="map-card-name">Empty Slot</span>
+        </button>
       </div>
-      <button class="landing-action btn-blue route-primary-action" id="btn-map-create-new">
-        <span>Create New Map</span>
-      </button>
     </div>
   </div>
 `;
@@ -1291,6 +1307,88 @@ function getSelectedGameMap() {
   return PLAY_MAP_CATALOG.find((map) => map.id === selectedGameMapId) || PLAY_MAP_CATALOG[0];
 }
 
+function getEditorMapSource() {
+  return editorMaze.children.map(c => ({
+    type: c.userData.type,
+    position: [c.position.x, c.position.y, c.position.z],
+    rotation: c.userData.rotation,
+    hasPowerPellet: c.userData.hasPowerPellet || false,
+    hasPacmanSpawn: c.userData.hasPacmanSpawn || false,
+    pacmanSpawnRotation: c.userData.pacmanSpawnRotation || 0
+  }));
+}
+
+function clearEditorMaze() {
+  while (editorMaze.children.length > 0) {
+    editorMaze.remove(editorMaze.children[0]);
+  }
+  removeGhostPiece();
+}
+
+function addEditorPieceFromMapItem(item) {
+  const piece = createMazePiece(item.type);
+  piece.position.set(...item.position);
+  piece.rotation.y = item.rotation;
+  piece.userData = { 
+    type: item.type, 
+    rotation: item.rotation,
+    hasPowerPellet: item.hasPowerPellet || false,
+    hasPacmanSpawn: item.hasPacmanSpawn || false,
+    pacmanSpawnRotation: item.pacmanSpawnRotation || 0
+  };
+
+  if (piece.userData.hasPowerPellet) {
+    const indicator = createPellet();
+    indicator.name = 'powerPelletIndicator';
+    
+    let localX = 0;
+    let localZ = 0;
+    if (piece.userData.type === 'corner') {
+      const cornerOffset = 3.57 * (1 - Math.SQRT1_2);
+      localX = cornerOffset;
+      localZ = -cornerOffset;
+    }
+    
+    indicator.position.set(localX, 2.5, localZ);
+    indicator.scale.set(0.4, 0.4, 0.4);
+    indicator.traverse(obj => {
+      if (obj.material) {
+        obj.material = obj.material.clone();
+        obj.material.depthTest = false;
+        obj.renderOrder = 998;
+      }
+    });
+    
+    piece.add(indicator);
+  }
+
+  if (piece.userData.hasPacmanSpawn) {
+    const indicator = createPacman();
+    indicator.name = 'pacmanSpawnIndicator';
+    
+    let localX = 0;
+    let localZ = 0;
+    if (piece.userData.type === 'corner') {
+      const cornerOffset = 3.57 * (1 - Math.SQRT1_2);
+      localX = cornerOffset;
+      localZ = -cornerOffset;
+    }
+    
+    indicator.position.set(localX, 2.5, localZ);
+    indicator.scale.setScalar(0.32);
+    indicator.rotation.y = piece.userData.pacmanSpawnRotation - piece.rotation.y;
+    
+    piece.add(indicator);
+  }
+
+  editorMaze.add(piece);
+}
+
+function loadMapIntoEditor(mapSource) {
+  clearEditorMaze();
+  mapSource.forEach(addEditorPieceFromMapItem);
+}
+
 function buildGameMaze() {
   gameMaze.clear();
   gameGhosts = [];
@@ -1298,14 +1396,7 @@ function buildGameMaze() {
   // If the editor has pieces, use the editor's map instead of the experimental one
   let mapSource = [];
   if (editorMaze.children.length > 0) {
-    mapSource = editorMaze.children.map(c => ({
-      type: c.userData.type,
-      position: [c.position.x, c.position.y, c.position.z],
-      rotation: c.userData.rotation,
-      hasPowerPellet: c.userData.hasPowerPellet || false,
-      hasPacmanSpawn: c.userData.hasPacmanSpawn || false,
-      pacmanSpawnRotation: c.userData.pacmanSpawnRotation || 0
-    }));
+    mapSource = getEditorMapSource();
   } else {
     mapSource = getSelectedGameMap().source;
   }
@@ -2392,6 +2483,19 @@ function renderMapPicker() {
   grid.dataset.rendered = 'true';
 }
 
+function renderMapManager() {
+  const currentCanvas = document.querySelector('#manager-current-map-thumbnail');
+  const emptyCanvas = document.querySelector('#manager-empty-map-thumbnail');
+
+  if (currentCanvas) {
+    drawMapThumbnail(currentCanvas, EXPERIMENTAL_GAME_MAP);
+  }
+
+  if (emptyCanvas) {
+    drawEmptyMapThumbnail(emptyCanvas);
+  }
+}
+
 function updateMapGhostStepper() {
   const value = document.querySelector('#map-ghost-count');
   const minus = document.querySelector('#btn-ghost-count-minus');
@@ -2470,6 +2574,7 @@ function enterMapManagerScreen() {
   enterShowroomScreen();
   appContainer.classList.add('route-overlay-active');
   document.querySelector('#map-manager-screen').classList.add('active');
+  renderMapManager();
   appContainer.classList.remove('showroom-active');
 }
 
@@ -2668,7 +2773,14 @@ document.querySelector('#btn-ghost-count-plus').addEventListener('click', () => 
   updateMapGhostStepper();
 });
 document.querySelector('#btn-map-manager-back').addEventListener('click', () => navigateTo('/menu'));
-document.querySelector('#btn-map-create-new').addEventListener('click', () => navigateTo('/editor'));
+document.querySelector('#btn-map-edit-current').addEventListener('click', () => {
+  loadMapIntoEditor(EXPERIMENTAL_GAME_MAP);
+  navigateTo('/editor');
+});
+document.querySelector('#btn-map-create-new').addEventListener('click', () => {
+  clearEditorMaze();
+  navigateTo('/editor');
+});
 
 registerRoutes({
   '/menu': {
