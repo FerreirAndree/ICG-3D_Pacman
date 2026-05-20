@@ -22,7 +22,9 @@ export function createPacman() {
     emissive: 0xffb000,
     emissiveIntensity: 0.45,
     roughness: 0.32,
-    metalness: 0.05
+    metalness: 0.05,
+    transparent: true,
+    opacity: 1
   });
   const upperShellMaterial = shellMaterial.clone();
   const eyeUniforms = {
@@ -80,11 +82,115 @@ export function createPacman() {
 
   const mouthMaterial = new THREE.MeshBasicMaterial({
     color: 0x010103,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 1
   });
+
+  const deathUniforms = {
+    mouthAngle: { value: 0.35 },
+    eyeBlink: { value: 1 },
+    eyeFade: { value: 1 }
+  };
+  const deathShellMaterial = shellMaterial.clone();
+  deathShellMaterial.customProgramCacheKey = () => 'pacman-death-mouth-cut';
+  deathShellMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.uDeathMouthAngle = deathUniforms.mouthAngle;
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      `#include <common>
+      varying vec3 vDeathLocalPos;`
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      vDeathLocalPos = position;`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <common>',
+      `#include <common>
+      uniform float uDeathMouthAngle;
+      uniform float uDeathEyeBlink;
+      uniform float uDeathEyeFade;
+      varying vec3 vDeathLocalPos;`
+    );
+    shader.uniforms.uDeathEyeBlink = deathUniforms.eyeBlink;
+    shader.uniforms.uDeathEyeFade = deathUniforms.eyeFade;
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <clipping_planes_fragment>',
+      `#include <clipping_planes_fragment>
+      float deathAngle = atan(abs(vDeathLocalPos.y), vDeathLocalPos.z);
+      float deathBlinkHeight = max(0.08, uDeathEyeBlink);
+      vec2 deathRightEye = vec2((vDeathLocalPos.x - 1.18) / 0.42, (vDeathLocalPos.y - 1.7) / (0.43 * deathBlinkHeight));
+      vec2 deathLeftEye = vec2((vDeathLocalPos.x + 1.18) / 0.42, (vDeathLocalPos.y - 1.7) / (0.43 * deathBlinkHeight));
+      float deathRightEyeMask = 1.0 - smoothstep(0.76, 1.0, dot(deathRightEye, deathRightEye));
+      float deathLeftEyeMask = 1.0 - smoothstep(0.76, 1.0, dot(deathLeftEye, deathLeftEye));
+      float deathEyeMask = max(deathRightEyeMask, deathLeftEyeMask) * uDeathEyeFade;
+      if (deathAngle < uDeathMouthAngle && deathEyeMask < 0.08) discard;`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <opaque_fragment>',
+      `
+      if (vDeathLocalPos.z > 0.0 && vDeathLocalPos.y > 0.35) {
+        float deathBlinkHeight = max(0.08, uDeathEyeBlink);
+        vec2 deathRightEye = vec2((vDeathLocalPos.x - 1.18) / 0.42, (vDeathLocalPos.y - 1.7) / (0.43 * deathBlinkHeight));
+        vec2 deathLeftEye = vec2((vDeathLocalPos.x + 1.18) / 0.42, (vDeathLocalPos.y - 1.7) / (0.43 * deathBlinkHeight));
+        float deathRightEyeMask = 1.0 - smoothstep(0.76, 1.0, dot(deathRightEye, deathRightEye));
+        float deathLeftEyeMask = 1.0 - smoothstep(0.76, 1.0, dot(deathLeftEye, deathLeftEye));
+
+        vec2 deathRightGlint = vec2((vDeathLocalPos.x - 1.18) / 0.08, (vDeathLocalPos.y - 1.76) / (0.08 * deathBlinkHeight));
+        vec2 deathLeftGlint = vec2((vDeathLocalPos.x + 1.18) / 0.08, (vDeathLocalPos.y - 1.76) / (0.08 * deathBlinkHeight));
+        float deathRightGlintMask = 1.0 - smoothstep(0.55, 1.0, dot(deathRightGlint, deathRightGlint));
+        float deathLeftGlintMask = 1.0 - smoothstep(0.55, 1.0, dot(deathLeftGlint, deathLeftGlint));
+
+        float deathEyeMask = max(deathRightEyeMask, deathLeftEyeMask) * uDeathEyeFade;
+        float deathGlintMask = max(deathRightGlintMask, deathLeftGlintMask) * uDeathEyeFade;
+        outgoingLight = mix(outgoingLight, vec3(0.006, 0.007, 0.01), deathEyeMask);
+        outgoingLight = mix(outgoingLight, vec3(0.95, 0.82, 0.34), deathGlintMask);
+      }
+      #include <opaque_fragment>`
+    );
+  };
 
   const jawGeometry = new THREE.SphereGeometry(radius, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2);
   const capGeometry = new THREE.CircleGeometry(radius * 0.985, 48);
+  const deathShell = new THREE.Mesh(new THREE.SphereGeometry(radius, 48, 32), deathShellMaterial);
+  deathShell.visible = false;
+  const deathMouthMaterial = mouthMaterial.clone();
+  const deathMouth = new THREE.Group();
+  const deathMouthTop = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.99, 48, 0, Math.PI), deathMouthMaterial);
+  deathMouthTop.rotation.x = Math.PI / 2;
+  const deathMouthBottom = deathMouthTop.clone();
+  deathMouth.add(deathMouthTop, deathMouthBottom);
+  deathMouth.visible = false;
+  const deathEyeMaterial = new THREE.MeshBasicMaterial({
+    color: 0x050507,
+    transparent: true,
+    opacity: 1,
+    depthWrite: false
+  });
+  const deathEyeGlintMaterial = new THREE.MeshBasicMaterial({
+    color: 0xf2d357,
+    transparent: true,
+    opacity: 1,
+    depthWrite: false
+  });
+  const deathEyeRig = new THREE.Group();
+  const deathEyeMeshes = [];
+  const deathEyeAxis = new THREE.Vector3(1, 0, 0);
+
+  [-1, 1].forEach((side) => {
+    const eye = new THREE.Group();
+    const eyeBody = new THREE.Mesh(new THREE.SphereGeometry(0.32, 18, 18), deathEyeMaterial);
+    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 10), deathEyeGlintMaterial);
+    glint.position.set(0, 0.1, 0.2);
+    eye.add(eyeBody, glint);
+    eye.userData.baseDeathPosition = new THREE.Vector3(side * 1.18, 1.7, 2.72);
+    eye.position.copy(eye.userData.baseDeathPosition);
+    deathEyeRig.add(eye);
+    deathEyeMeshes.push(eye);
+  });
+  deathEyeRig.visible = false;
 
   const upperShell = new THREE.Mesh(jawGeometry, upperShellMaterial);
   const upperCap = new THREE.Mesh(capGeometry, mouthMaterial);
@@ -101,11 +207,49 @@ export function createPacman() {
     new THREE.SphereGeometry(radius * 0.96, 40, 14, Math.PI, Math.PI),
     mouthMaterial
   );
-  group.add(throat, upperGroup, lowerGroup);
+  group.add(throat, upperGroup, lowerGroup, deathShell, deathMouth, deathEyeRig);
 
   const baseEmissiveIntensity = 0.45;
   const poweredEmissiveIntensity = 1.25;
+  const visibleMaterials = [shellMaterial, upperShellMaterial, mouthMaterial, deathShellMaterial, deathMouthMaterial, deathEyeMaterial, deathEyeGlintMaterial];
+  const deathState = {
+    active: false,
+    elapsed: 0,
+    duration: 1.45,
+    baseScale: new THREE.Vector3(1, 1, 1)
+  };
   let isPowerMode = false;
+
+  function setModelOpacity(opacity) {
+    visibleMaterials.forEach((material) => {
+      material.opacity = opacity;
+    });
+  }
+
+  function resetPacmanVisualPose() {
+    group.visible = true;
+    group.scale.copy(deathState.baseScale);
+    setModelOpacity(1);
+    upperGroup.visible = true;
+    lowerGroup.visible = true;
+    throat.visible = true;
+    deathShell.visible = false;
+    deathMouth.visible = false;
+    deathEyeRig.visible = false;
+    deathEyeRig.rotation.x = 0;
+    deathUniforms.mouthAngle.value = 0.35;
+    deathUniforms.eyeBlink.value = 1;
+    deathUniforms.eyeFade.value = 0;
+    deathMouthTop.rotation.x = Math.PI / 2;
+    deathMouthBottom.rotation.x = Math.PI / 2;
+    deathEyeMeshes.forEach((eye) => {
+      eye.position.copy(eye.userData.baseDeathPosition);
+      eye.rotation.set(0, 0, 0);
+      eye.scale.y = 1;
+    });
+    deathState.active = false;
+    deathState.elapsed = 0;
+  }
 
   group.setPowerMode = (enabled) => {
     isPowerMode = Boolean(enabled);
@@ -116,12 +260,67 @@ export function createPacman() {
     }
   };
 
+  group.playDeathAnimation = (duration = 1.45) => {
+    deathState.baseScale.copy(group.scale);
+    resetPacmanVisualPose();
+    deathState.active = true;
+    deathState.duration = duration;
+    upperGroup.visible = false;
+    lowerGroup.visible = false;
+    throat.visible = false;
+    deathShell.visible = true;
+    deathMouth.visible = true;
+    deathEyeRig.visible = true;
+    deathUniforms.eyeFade.value = 0;
+  };
+
+  group.resetDeathAnimation = resetPacmanVisualPose;
+  group.isDeathAnimationActive = () => deathState.active;
+
   group.userData = {
     type: 'pacman',
-    update: (time) => {
+    update: (time, deltaTime = 1 / 60) => {
+      if (deathState.active) {
+        deathState.elapsed = Math.min(deathState.duration, deathState.elapsed + deltaTime);
+
+        const progress = deathState.duration > 0
+          ? deathState.elapsed / deathState.duration
+          : 1;
+        const fadeProgress = THREE.MathUtils.smoothstep(progress, 0.82, 1);
+        const openProgress = THREE.MathUtils.smoothstep(progress, 0, 1);
+
+        deathUniforms.mouthAngle.value = THREE.MathUtils.lerp(0.35, Math.PI, openProgress);
+        deathUniforms.eyeBlink.value = 1;
+        deathUniforms.eyeFade.value = 0;
+        const mouthPlaneAngle = deathUniforms.mouthAngle.value;
+        deathMouthTop.rotation.x = Math.PI / 2 - mouthPlaneAngle;
+        deathMouthBottom.rotation.x = Math.PI / 2 + mouthPlaneAngle;
+        deathEyeRig.rotation.x = 0;
+        const deathEyeFade = 1 - THREE.MathUtils.smoothstep(progress, 0.72, 0.94);
+        deathEyeMaterial.opacity = deathEyeFade;
+        deathEyeGlintMaterial.opacity = deathEyeFade;
+        deathEyeMeshes.forEach((eye) => {
+          eye.position.copy(eye.userData.baseDeathPosition).applyAxisAngle(deathEyeAxis, -mouthPlaneAngle);
+          eye.position.add(eye.position.clone().normalize().multiplyScalar(0.08));
+          eye.rotation.set(0, 0, 0);
+          eye.scale.y = 1;
+        });
+        eyeUniforms.blink.value = 1;
+        group.scale.copy(deathState.baseScale);
+        setModelOpacity(1 - fadeProgress);
+
+        if (progress >= 1) {
+          deathState.active = false;
+          group.visible = false;
+        }
+
+        return;
+      }
+
       const chomp = Math.abs(Math.sin(time * 6.5)) * 0.48;
       upperGroup.rotation.x = -chomp;
       lowerGroup.rotation.x = Math.PI + chomp;
+      setModelOpacity(1);
 
       const blink = Math.sin(time * 2.1) > 0.985 ? 0.18 : 1;
       eyeUniforms.blink.value = blink;

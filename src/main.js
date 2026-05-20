@@ -323,7 +323,7 @@ const GAME_CAMERA_TARGET_HEIGHT = 0.5;
 const GAME_CAMERA_CENTERED_LOOK_AHEAD = 0.75;
 const PACMAN_BODY_RADIUS = 3.5;
 const GHOST_BODY_RADIUS = 2.1;
-const PACMAN_CAPTURE_RESOLVE_DURATION = 1.0;
+const PACMAN_CAPTURE_RESOLVE_DURATION = 2.0;
 const STARTING_LIVES = 3;
 const STANDARD_PELLET_SCORE = 10;
 const POWER_PELLET_SCORE = 50;
@@ -1199,6 +1199,9 @@ function buildGameMaze() {
 function resetGameCharactersToSpawn(snapCamera = true) {
   if (!pacmanController || gameGhosts.length === 0 || !pacmanSpawnState) return;
 
+  if (gamePacman?.resetDeathAnimation) {
+    gamePacman.resetDeathAnimation();
+  }
   pacmanController.reset(pacmanSpawnState.tile, pacmanSpawnState.direction, pacmanSpawnState.connector);
   forEachGhost((entry) => {
     if (!entry.spawnState) return;
@@ -1252,6 +1255,9 @@ function startPacmanCaptureResolve() {
 
   clearPowerPelletState();
   captureResolveTimer = PACMAN_CAPTURE_RESOLVE_DURATION;
+  if (gamePacman?.playDeathAnimation) {
+    gamePacman.playDeathAnimation(PACMAN_CAPTURE_RESOLVE_DURATION);
+  }
   isGameLookBackActive = false;
   previousGameLookBackState = false;
   gameCameraState.isReversing = false;
@@ -1341,6 +1347,21 @@ const pacman = createPacman();
 pacman.position.set(HERO_X, 7.5, HERO_Z);
 pacman.rotation.y = Math.PI / 1.4 + Math.PI / 2 + Math.PI / 12; // Extra 15 deg left
 showcase.add(pacman);
+
+const deathPacmanPodium = createPedestal();
+deathPacmanPodium.position.set(HERO_X - 24, 3.5, HERO_Z);
+showcase.add(deathPacmanPodium);
+
+const deathPacman = createPacman();
+deathPacman.position.set(HERO_X - 24, 7.5, HERO_Z);
+deathPacman.rotation.y = pacman.rotation.y;
+showcase.add(deathPacman);
+
+let lastDeathDemoTime = -Infinity;
+const DEATH_DEMO_INTERVAL = 5;
+const DEATH_DEMO_DURATION = 1.45;
+let wasDeathDemoAnimating = false;
+let deathDemoResetTimer = 0;
 
 // Pellet Wing (Row 2 of the 2x2 Character Grid)
 const PELLET_X = HERO_X; // Back to column 1
@@ -2808,10 +2829,32 @@ function animate() {
   
   // Update Entities
   if (pacman && pacman.userData.update) {
-    pacman.userData.update(elapsedTime);
+    pacman.userData.update(elapsedTime, deltaTime);
+  }
+  if (deathPacman && deathPacman.userData.update) {
+    if (deathDemoResetTimer > 0) {
+      deathDemoResetTimer = Math.max(0, deathDemoResetTimer - deltaTime);
+      if (deathDemoResetTimer === 0) {
+        deathPacman.resetDeathAnimation();
+      }
+    }
+
+    if (
+      deathDemoResetTimer === 0
+      && !deathPacman.isDeathAnimationActive?.()
+      && elapsedTime - lastDeathDemoTime >= DEATH_DEMO_INTERVAL
+    ) {
+      deathPacman.playDeathAnimation(DEATH_DEMO_DURATION);
+      lastDeathDemoTime = elapsedTime;
+    }
+    deathPacman.userData.update(elapsedTime, deltaTime);
+    if (wasDeathDemoAnimating && !deathPacman.isDeathAnimationActive?.()) {
+      deathDemoResetTimer = 0.85;
+    }
+    wasDeathDemoAnimating = deathPacman.isDeathAnimationActive?.() || false;
   }
   if (blinky && blinky.userData.update) {
-    blinky.userData.update(elapsedTime);
+    blinky.userData.update(elapsedTime, deltaTime);
   }
   if (pinky && pinky.userData.update) {
     pinky.userData.update(elapsedTime);
@@ -2834,7 +2877,7 @@ function animate() {
 
   if (isGameMode && activeController) {
     if (isGameOver || isLevelComplete) {
-      if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime);
+      if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime, deltaTime);
       forEachGhost((entry) => {
         if (entry.model.visible && entry.model.userData.update) entry.model.userData.update(elapsedTime);
       });
@@ -2845,7 +2888,7 @@ function animate() {
     } else if (isCaptureResolving()) {
       captureResolveTimer = Math.max(0, captureResolveTimer - deltaTime);
 
-      if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime);
+      if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime, deltaTime);
       forEachGhost((entry) => {
         if (entry.model.visible && entry.model.userData.update) entry.model.userData.update(elapsedTime);
       });
