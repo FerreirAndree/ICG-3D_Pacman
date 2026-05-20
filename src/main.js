@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildShowcase, showcaseLayout, createMazePiece, createPedestal, TILE_SIZE, PIECE_CONNECTORS } from './mazePieces.js';
 import { createPacman, createGhost, createPellet, createStandardPellet } from './entities.js';
-import { buildMazeGraph, EXPERIMENTAL_GAME_MAP, getAbsoluteDirections as getGraphAbsoluteDirections } from './mazeGraph.js';
+import { buildMazeGraph, DIRECTIONS, EXPERIMENTAL_GAME_MAP, getAbsoluteDirections as getGraphAbsoluteDirections } from './mazeGraph.js';
 import { EntityController } from './pacmanController.js';
 import { PelletManager, PELLET_TYPES } from './pelletManager.js';
 import { GhostAIController } from './ghostAIController.js';
@@ -323,24 +323,47 @@ const uiHtml = `
   </div>
 
   <div class="route-overlay" id="map-select-screen">
-    <div class="route-screen">
+    <div class="route-screen map-picker">
       <div class="route-screen-header">
-        <button class="route-back-button" id="btn-map-select-back" aria-label="Back to menu">Back</button>
+        <button class="route-back-button route-icon-button" id="btn-map-select-back" aria-label="Back to menu">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 5L8 12L15 19" />
+          </svg>
+        </button>
         <div>
-          <p class="route-kicker">Game Setup</p>
-          <h2>Choose Map</h2>
+          <h2>Pick a Map</h2>
         </div>
       </div>
-      <button class="route-map-option" id="btn-map-select-default">
-        <span class="route-map-title">Default Maze</span>
-        <span class="route-map-meta">Current experimental game map</span>
-        <span class="route-map-action">Start</span>
-      </button>
-      <button class="route-map-option route-map-option-dev" id="btn-map-select-dev">
-        <span class="route-map-title">Default Maze - Dev Tools</span>
-        <span class="route-map-meta">Same map with AI, collision, ghost count, and debug controls</span>
-        <span class="route-map-action">Start Dev</span>
-      </button>
+      <div class="map-picker-grid" id="map-picker-grid"></div>
+      <details class="map-advanced-panel">
+        <summary>
+          <span>Advanced</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 9L12 15L18 9" />
+          </svg>
+        </summary>
+        <div class="map-advanced-controls">
+          <label class="map-dev-toggle">
+            <input type="checkbox" id="map-jumpscare-toggle">
+            <span>Jumpscare mode</span>
+          </label>
+          <div class="map-ghost-count-control">
+            <span>Ghosts</span>
+            <div class="ghost-stepper" id="map-ghost-stepper">
+              <button class="ghost-stepper-button" id="btn-ghost-count-minus" type="button" aria-label="Decrease ghost count">-</button>
+              <div class="ghost-stepper-value" id="map-ghost-count" role="status" aria-live="polite">4</div>
+              <button class="ghost-stepper-button ghost-stepper-button-plus" id="btn-ghost-count-plus" type="button" aria-label="Increase ghost count">+</button>
+            </div>
+          </div>
+        </div>
+      </details>
+      <div class="map-picker-footer">
+        <label class="map-dev-toggle">
+          <input type="checkbox" id="map-dev-toggle">
+          <span>Dev tools</span>
+        </label>
+        <button class="map-start-button" id="btn-map-select-start">Start</button>
+      </div>
     </div>
   </div>
 
@@ -461,6 +484,31 @@ let activePowerPelletDuration = 0;
 let ghostsEatenThisPower = 0;
 let activeGhostCount = 4;
 let currentGameGraph = null;
+let selectedGameMapId = 'classic';
+let selectedMapGhostCount = 4;
+
+const PLAY_MAP_CATALOG = [
+  {
+    id: 'classic',
+    name: 'Classic',
+    description: 'Default glass-pipe maze',
+    source: EXPERIMENTAL_GAME_MAP
+  },
+  {
+    id: 'coming-soon-1',
+    name: 'Custom 01',
+    description: 'Map slot reserved for your saved mazes',
+    source: null,
+    disabled: true
+  },
+  {
+    id: 'coming-soon-2',
+    name: 'Custom 02',
+    description: 'Map slot reserved for your saved mazes',
+    source: null,
+    disabled: true
+  }
+];
 
 // --- 3D Landing Menu Variables ---
 let menuScene = null;
@@ -1239,6 +1287,10 @@ function createGameGhostEntry(definition, graph) {
   };
 }
 
+function getSelectedGameMap() {
+  return PLAY_MAP_CATALOG.find((map) => map.id === selectedGameMapId) || PLAY_MAP_CATALOG[0];
+}
+
 function buildGameMaze() {
   gameMaze.clear();
   gameGhosts = [];
@@ -1255,7 +1307,7 @@ function buildGameMaze() {
       pacmanSpawnRotation: c.userData.pacmanSpawnRotation || 0
     }));
   } else {
-    mapSource = EXPERIMENTAL_GAME_MAP;
+    mapSource = getSelectedGameMap().source;
   }
 
   mapSource.forEach((item) => {
@@ -1729,11 +1781,15 @@ function setDevControlsVisible(visible) {
 
 function enterGameMode(options = {}) {
   const isDevMode = Boolean(options.dev);
+  const requestedGhostCount = Number(options.ghostCount);
 
   isGameMode = true;
   isGameLookBackActive = false;
   previousGameLookBackState = false;
-  isJumpscareMode = false;
+  isJumpscareMode = Boolean(options.jumpscare);
+  if (Number.isInteger(requestedGhostCount)) {
+    activeGhostCount = THREE.MathUtils.clamp(requestedGhostCount, 1, GHOST_DEFINITIONS.length);
+  }
   forEachGhost((entry) => entry.ai.setEnabled(false));
   areCaptureCollisionsEnabled = true;
   captureResolveTimer = 0;
@@ -2065,6 +2121,287 @@ function resizeMenu3D() {
   menuRenderer.setSize(width, height, false);
 }
 
+function getMapTileBounds(mapSource) {
+  const xs = mapSource.map((piece) => piece.position[0]);
+  const zs = mapSource.map((piece) => piece.position[2]);
+
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minZ: Math.min(...zs),
+    maxZ: Math.max(...zs)
+  };
+}
+
+function drawRoundedRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+function drawOctagon(ctx, x, y, radius) {
+  const sides = 8;
+  ctx.beginPath();
+  for (let index = 0; index < sides; index += 1) {
+    const angle = Math.PI / 8 + index * (Math.PI * 2 / sides);
+    const px = x + Math.cos(angle) * radius;
+    const py = y + Math.sin(angle) * radius;
+    if (index === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+function drawEmptyMapThumbnail(canvas) {
+  const ctx = canvas.getContext('2d');
+  const { width, height } = canvas;
+
+  ctx.clearRect(0, 0, width, height);
+  const background = ctx.createLinearGradient(0, 0, width, height);
+  background.addColorStop(0, '#020614');
+  background.addColorStop(1, '#050b1d');
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.save();
+  ctx.globalAlpha = 0.42;
+  ctx.strokeStyle = 'rgba(51, 102, 255, 0.14)';
+  ctx.lineWidth = 1;
+  for (let x = 24; x < width; x += 28) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let y = 24; y < height; y += 28) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(136, 178, 255, 0.22)';
+  ctx.font = '700 15px Trebuchet MS, sans-serif';
+  ctx.letterSpacing = '2px';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('EMPTY SLOT', width / 2, height / 2);
+  ctx.restore();
+}
+
+function drawMapThumbnail(canvas, mapSource) {
+  if (!mapSource) {
+    drawEmptyMapThumbnail(canvas);
+    return;
+  }
+
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+  const bounds = getMapTileBounds(mapSource);
+  const mapWidth = Math.max(TILE_SIZE, bounds.maxX - bounds.minX + TILE_SIZE);
+  const mapHeight = Math.max(TILE_SIZE, bounds.maxZ - bounds.minZ + TILE_SIZE);
+  const padding = 22;
+  const scale = Math.min(
+    (width - padding * 2) / mapWidth,
+    (height - padding * 2) / mapHeight
+  );
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+
+  const toCanvas = (x, z) => ({
+    x: width / 2 + (x - centerX) * scale,
+    y: height / 2 + (z - centerZ) * scale
+  });
+
+  ctx.clearRect(0, 0, width, height);
+  const background = ctx.createLinearGradient(0, 0, width, height);
+  background.addColorStop(0, '#020614');
+  background.addColorStop(1, '#050b1d');
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+  ctx.strokeStyle = 'rgba(51, 102, 255, 0.16)';
+  ctx.lineWidth = 1;
+  for (let x = 24; x < width; x += 24) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let y = 24; y < height; y += 24) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  ctx.save();
+  mapSource.forEach((piece) => {
+    const center = toCanvas(piece.position[0], piece.position[2]);
+    const radius = TILE_SIZE * scale * (piece.type === 'ghostchamber' ? 0.52 : 0.46);
+
+    drawOctagon(ctx, center.x, center.y, radius);
+    ctx.fillStyle = piece.type === 'ghostchamber'
+      ? 'rgba(255, 68, 187, 0.22)'
+      : 'rgba(24, 63, 155, 0.55)';
+    ctx.shadowColor = piece.type === 'ghostchamber'
+      ? 'rgba(255, 68, 187, 0.45)'
+      : 'rgba(51, 102, 255, 0.45)';
+    ctx.shadowBlur = 12;
+    ctx.fill();
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = piece.type === 'ghostchamber'
+      ? 'rgba(255, 68, 187, 0.55)'
+      : 'rgba(51, 102, 255, 0.28)';
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  const pipeSegments = [];
+
+  mapSource.forEach((piece) => {
+    if (piece.type === 'ghostchamber') return;
+
+    const graphPiece = {
+      type: piece.type,
+      rotation: piece.rotation,
+      position: piece.position
+    };
+    const center = toCanvas(piece.position[0], piece.position[2]);
+    const connectors = PIECE_CONNECTORS[piece.type] || [];
+
+    connectors.forEach((connector) => {
+      const absoluteDirection = getGraphAbsoluteDirections([connector], graphPiece.rotation)[0];
+      const direction = DIRECTIONS[absoluteDirection];
+      if (!direction) return;
+      const end = toCanvas(
+        piece.position[0] + direction.x * TILE_SIZE * 0.48,
+        piece.position[2] + direction.z * TILE_SIZE * 0.48
+      );
+
+      pipeSegments.push({ from: center, to: end });
+    });
+  });
+
+  [
+    { width: Math.max(22, TILE_SIZE * scale * 0.78), color: 'rgba(0, 34, 255, 0.2)', blur: 18 },
+    { width: Math.max(15, TILE_SIZE * scale * 0.54), color: 'rgba(0, 75, 255, 0.72)', blur: 12 },
+    { width: Math.max(8, TILE_SIZE * scale * 0.28), color: '#0b62ff', blur: 4 },
+    { width: Math.max(3, TILE_SIZE * scale * 0.08), color: 'rgba(120, 178, 255, 0.9)', blur: 0 }
+  ].forEach((pass) => {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = pass.color;
+    ctx.shadowBlur = pass.blur;
+    ctx.strokeStyle = pass.color;
+    ctx.lineWidth = pass.width;
+    pipeSegments.forEach((segment) => {
+      ctx.beginPath();
+      ctx.moveTo(segment.from.x, segment.from.y);
+      ctx.lineTo(segment.to.x, segment.to.y);
+      ctx.stroke();
+    });
+    ctx.restore();
+  });
+
+  ctx.save();
+  mapSource
+    .filter((piece) => piece.type === 'ghostchamber')
+    .forEach((piece) => {
+      const center = toCanvas(piece.position[0], piece.position[2]);
+      const size = TILE_SIZE * scale * 0.68;
+      drawRoundedRect(ctx, center.x - size / 2, center.y - size / 2, size, size, 8);
+      ctx.fillStyle = 'rgba(255, 68, 187, 0.24)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 68, 187, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+
+  mapSource.forEach((piece) => {
+    const center = toCanvas(piece.position[0], piece.position[2]);
+    if (piece.hasPowerPellet) {
+      ctx.beginPath();
+      ctx.fillStyle = '#ffaa00';
+      ctx.shadowColor = 'rgba(255, 170, 0, 0.95)';
+      ctx.shadowBlur = 12;
+      ctx.arc(center.x, center.y, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (piece.hasPacmanSpawn) {
+      ctx.beginPath();
+      ctx.fillStyle = '#ffd91f';
+      ctx.shadowColor = 'rgba(255, 217, 31, 0.95)';
+      ctx.shadowBlur = 10;
+      ctx.moveTo(center.x + 7, center.y);
+      ctx.arc(center.x, center.y, 7, 0.3, Math.PI * 1.7);
+      ctx.closePath();
+      ctx.fill();
+    }
+  });
+  ctx.restore();
+}
+
+function renderMapPicker() {
+  const grid = document.querySelector('#map-picker-grid');
+  if (!grid || grid.dataset.rendered === 'true') return;
+
+  grid.innerHTML = PLAY_MAP_CATALOG.map((map) => `
+    <button class="map-card${map.id === selectedGameMapId ? ' selected' : ''}${map.disabled ? ' disabled' : ''}" data-map-id="${map.id}" ${map.disabled ? 'disabled' : ''}>
+      <canvas class="map-thumbnail" width="320" height="320" aria-hidden="true"></canvas>
+      <span class="map-card-name">${map.name}</span>
+    </button>
+  `).join('');
+
+  grid.querySelectorAll('.map-card').forEach((card) => {
+    const map = PLAY_MAP_CATALOG.find((entry) => entry.id === card.dataset.mapId);
+    const canvas = card.querySelector('canvas');
+    drawMapThumbnail(canvas, map.source);
+    if (map.disabled) return;
+    card.addEventListener('click', () => {
+      selectedGameMapId = map.id;
+      grid.querySelectorAll('.map-card').forEach((item) => item.classList.toggle('selected', item === card));
+    });
+    card.addEventListener('dblclick', () => {
+      navigateTo('/game', {
+        query: {
+          map: selectedGameMapId,
+          dev: document.querySelector('#map-dev-toggle')?.checked ? 1 : false
+        }
+      });
+    });
+  });
+
+  grid.dataset.rendered = 'true';
+}
+
+function updateMapGhostStepper() {
+  const value = document.querySelector('#map-ghost-count');
+  const minus = document.querySelector('#btn-ghost-count-minus');
+  const plus = document.querySelector('#btn-ghost-count-plus');
+
+  if (value) value.textContent = selectedMapGhostCount;
+  if (minus) minus.disabled = selectedMapGhostCount <= 1;
+  if (plus) plus.disabled = selectedMapGhostCount >= GHOST_DEFINITIONS.length;
+}
+
 function enterMenuScreen() {
   appContainer.classList.add('landing-active');
   appContainer.classList.remove('showroom-active');
@@ -2119,6 +2456,8 @@ function enterMapSelectScreen() {
   enterShowroomScreen();
   appContainer.classList.add('route-overlay-active');
   document.querySelector('#map-select-screen').classList.add('active');
+  renderMapPicker();
+  updateMapGhostStepper();
   appContainer.classList.remove('showroom-active');
 }
 
@@ -2310,8 +2649,24 @@ document.querySelector('#btn-showroom-menu').addEventListener('click', () => nav
 document.querySelector('#btn-showroom-play').addEventListener('click', () => navigateTo('/play/maps'));
 document.querySelector('#btn-showroom-create').addEventListener('click', () => navigateTo('/maps'));
 document.querySelector('#btn-map-select-back').addEventListener('click', () => navigateTo('/menu'));
-document.querySelector('#btn-map-select-default').addEventListener('click', () => navigateTo('/game'));
-document.querySelector('#btn-map-select-dev').addEventListener('click', () => navigateTo('/game', { query: { dev: 1 } }));
+document.querySelector('#btn-map-select-start').addEventListener('click', () => {
+  navigateTo('/game', {
+    query: {
+      map: selectedGameMapId,
+      dev: document.querySelector('#map-dev-toggle')?.checked ? 1 : false,
+      jumpscare: document.querySelector('#map-jumpscare-toggle')?.checked ? 1 : false,
+      ghosts: selectedMapGhostCount
+    }
+  });
+});
+document.querySelector('#btn-ghost-count-minus').addEventListener('click', () => {
+  selectedMapGhostCount = Math.max(1, selectedMapGhostCount - 1);
+  updateMapGhostStepper();
+});
+document.querySelector('#btn-ghost-count-plus').addEventListener('click', () => {
+  selectedMapGhostCount = Math.min(GHOST_DEFINITIONS.length, selectedMapGhostCount + 1);
+  updateMapGhostStepper();
+});
 document.querySelector('#btn-map-manager-back').addEventListener('click', () => navigateTo('/menu'));
 document.querySelector('#btn-map-create-new').addEventListener('click', () => navigateTo('/editor'));
 
@@ -2329,7 +2684,16 @@ registerRoutes({
     exit: exitMapSelectScreen
   },
   '/game': {
-    enter: (route) => enterGameMode({ dev: route.query.dev === '1' || route.query.dev === 'true' }),
+    enter: (route) => {
+      if (route.query.map) {
+        selectedGameMapId = route.query.map;
+      }
+      enterGameMode({
+        dev: route.query.dev === '1' || route.query.dev === 'true',
+        jumpscare: route.query.jumpscare === '1' || route.query.jumpscare === 'true',
+        ghostCount: route.query.ghosts
+      });
+    },
     update: (route) => setDevControlsVisible(route.query.dev === '1' || route.query.dev === 'true'),
     exit: exitGameMode
   },
