@@ -204,8 +204,24 @@ const uiHtml = `
     </div>
   </div>
 
+  <div class="landing-overlay" id="landing-menu">
+    <div class="landing-menu-container">
+      <div id="menu-3d-container">
+        <canvas id="menu-3d-canvas"></canvas>
+      </div>
+      <div class="landing-content">
+        <h1>3D Pacman</h1>
+        <div class="landing-actions">
+          <button class="landing-action primary" id="btn-menu-start">Start Game</button>
+          <button class="landing-action" id="btn-menu-editor">Create Map</button>
+          <button class="landing-action" id="btn-menu-showroom">Showroom</button>
+        </div>
+      </div>
+    </div>
+  </div>
 `;
 appContainer.insertAdjacentHTML('beforeend', uiHtml);
+appContainer.classList.add('landing-active');
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -302,6 +318,19 @@ let activePowerPelletDuration = 0;
 let ghostsEatenThisPower = 0;
 let activeGhostCount = 4;
 let currentGameGraph = null;
+
+// --- 3D Landing Menu Variables ---
+let menuScene = null;
+let menuCamera = null;
+let menuRenderer = null;
+let menuPacman = null;
+let menuScaredGhost = null;
+let menuClyde = null;
+let menuPellets = [];
+const MENU_TRACK_WIDTH = 42;
+const MENU_TRACK_HEIGHT = 30;
+const MENU_PACMAN_SPEED = 12.0; // Units per second
+let menuElapsedTime = 0;
 const gameCameraState = {
   forward: new THREE.Vector3(1, 0, 0),
   reverseHoldForward: new THREE.Vector3(1, 0, 0),
@@ -1634,6 +1663,249 @@ function toggleGameMode() {
   }
 }
 
+function getMenuTrackPosition(d) {
+  const w = MENU_TRACK_WIDTH;
+  const h = MENU_TRACK_HEIGHT;
+  const halfW = w / 2;
+  const halfH = h / 2;
+  const perimeter = 2 * (w + h);
+  
+  d = d % perimeter;
+  if (d < 0) d += perimeter;
+
+  if (d < w) {
+    // Segment 0: Top edge (left to right)
+    return {
+      pos: new THREE.Vector3(-halfW + d, 0, -halfH),
+      dir: new THREE.Vector3(1, 0, 0)
+    };
+  } else if (d < w + h) {
+    // Segment 1: Right edge (top to bottom)
+    const offset = d - w;
+    return {
+      pos: new THREE.Vector3(halfW, 0, -halfH + offset),
+      dir: new THREE.Vector3(0, 0, 1)
+    };
+  } else if (d < 2 * w + h) {
+    // Segment 2: Bottom edge (right to left)
+    const offset = d - (w + h);
+    return {
+      pos: new THREE.Vector3(halfW - offset, 0, halfH),
+      dir: new THREE.Vector3(-1, 0, 0)
+    };
+  } else {
+    // Segment 3: Left edge (bottom to top)
+    const offset = d - (2 * w + h);
+    return {
+      pos: new THREE.Vector3(-halfW, 0, halfH - offset),
+      dir: new THREE.Vector3(0, 0, -1)
+    };
+  }
+}
+
+function initMenu3D() {
+  const canvas = document.querySelector('#menu-3d-canvas');
+  if (!canvas) return;
+
+  const width = canvas.clientWidth || 560;
+  const height = canvas.clientHeight || 400;
+
+  menuScene = new THREE.Scene();
+
+  menuCamera = new THREE.PerspectiveCamera(46, width / height, 0.1, 100);
+  // Position camera overhead with a tilt to emphasize 3D depth, looking down at the center.
+  menuCamera.position.set(0, 45.0, 8.0);
+  menuCamera.up.set(0, 1, 0);
+  menuCamera.lookAt(0, -1.0, 0);
+
+  menuRenderer = new THREE.WebGLRenderer({
+    canvas: canvas,
+    alpha: true,
+    antialias: true
+  });
+  menuRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+  menuRenderer.setSize(width, height, false);
+  menuRenderer.outputColorSpace = THREE.SRGBColorSpace;
+  menuRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+  menuRenderer.toneMappingExposure = 1.05;
+
+  // Add lights
+  const ambientLight = new THREE.AmbientLight(0x89adff, 0.8);
+  menuScene.add(ambientLight);
+
+  const dirLight1 = new THREE.DirectionalLight(0xffd21a, 2.2); // Neon yellow
+  dirLight1.position.set(5, 15, 5);
+  menuScene.add(dirLight1);
+
+  const dirLight2 = new THREE.DirectionalLight(0x3b7cff, 1.6); // Electric blue
+  dirLight2.position.set(-5, 10, -5);
+  menuScene.add(dirLight2);
+
+  // Spawn Pacman
+  menuPacman = createPacman();
+  menuPacman.scale.setScalar(0.45); // Shrink to miniature scale
+  menuScene.add(menuPacman);
+
+  // Spawn Scared Ghost (chased by Pacman)
+  menuScaredGhost = createGhost(0x0022ff);
+  menuScaredGhost.scale.setScalar(0.42);
+  menuScaredGhost.setVulnerable(true);
+  menuScene.add(menuScaredGhost);
+
+  // Spawn Clyde (chasing Pacman)
+  menuClyde = createGhost(0xff8822);
+  menuClyde.scale.setScalar(0.42);
+  menuScene.add(menuClyde);
+
+  // Spawn pellets
+  const perimeter = 2 * (MENU_TRACK_WIDTH + MENU_TRACK_HEIGHT);
+  const pelletSpacing = 3.0;
+  const numPellets = Math.floor(perimeter / pelletSpacing);
+  
+  menuPellets = [];
+  for (let i = 0; i < numPellets; i++) {
+    const pDist = i * pelletSpacing;
+    const pellet = createStandardPellet();
+    pellet.scale.setScalar(1.4); // Standard pellet has radius 0.35. 1.4 makes it radius 0.49, perfect miniature.
+    const info = getMenuTrackPosition(pDist);
+    pellet.position.copy(info.pos);
+    menuScene.add(pellet);
+    
+    menuPellets.push({
+      mesh: pellet,
+      dist: pDist,
+      eaten: false
+    });
+  }
+
+  menuElapsedTime = 0;
+}
+
+function updateMenu3D(time, deltaTime) {
+  if (!menuScene || !menuPacman) return;
+
+  menuElapsedTime += deltaTime;
+
+  const perimeter = 2 * (MENU_TRACK_WIDTH + MENU_TRACK_HEIGHT);
+  const pacmanDist = (menuElapsedTime * MENU_PACMAN_SPEED) % perimeter;
+
+  // Position Pacman
+  const info = getMenuTrackPosition(pacmanDist);
+  menuPacman.position.copy(info.pos);
+
+  // Look ahead to face direction of travel
+  const lookAheadDist = pacmanDist + 0.15;
+  const lookAheadInfo = getMenuTrackPosition(lookAheadDist);
+  menuPacman.lookAt(lookAheadInfo.pos);
+
+  // Update Pacman mouth chomping and eye blinking animations
+  if (menuPacman.userData && menuPacman.userData.update) {
+    menuPacman.userData.update(menuElapsedTime, deltaTime);
+  }
+
+  // Update Scared Ghost position and animation (30.0 units ahead of Pacman)
+  if (menuScaredGhost) {
+    const scaredDist = (pacmanDist + 30.0) % perimeter;
+    const scaredInfo = getMenuTrackPosition(scaredDist);
+    menuScaredGhost.position.copy(scaredInfo.pos);
+    const scaredLookAheadDist = scaredDist + 0.15;
+    const scaredLookAheadInfo = getMenuTrackPosition(scaredLookAheadDist);
+    menuScaredGhost.lookAt(scaredLookAheadInfo.pos);
+    if (menuScaredGhost.userData && menuScaredGhost.userData.update) {
+      menuScaredGhost.userData.update(menuElapsedTime);
+    }
+  }
+
+  // Update Clyde position and animation (30.0 units behind Pacman)
+  if (menuClyde) {
+    const clydeDist = (pacmanDist - 30.0 + perimeter) % perimeter;
+    const clydeInfo = getMenuTrackPosition(clydeDist);
+    menuClyde.position.copy(clydeInfo.pos);
+    const clydeLookAheadDist = clydeDist + 0.15;
+    const clydeLookAheadInfo = getMenuTrackPosition(clydeLookAheadDist);
+    menuClyde.lookAt(clydeLookAheadInfo.pos);
+    if (menuClyde.userData && menuClyde.userData.update) {
+      menuClyde.userData.update(menuElapsedTime);
+    }
+  }
+
+  // Update pellets (floating and eating collision)
+  menuPellets.forEach((p) => {
+    let diff = pacmanDist - p.dist;
+    if (diff < 0) diff += perimeter;
+
+    // Collision check: if Pacman is close to the pellet
+    const distToPacman = p.mesh.position.distanceTo(menuPacman.position);
+    if (distToPacman < 2.3) {
+      if (!p.eaten) {
+        p.eaten = true;
+        p.mesh.visible = false;
+      }
+    }
+
+    // Respawn pellet: if Pacman has moved past the pellet and is far enough away (beyond Clyde).
+    if (diff > 33.0 && diff < perimeter - 1.5) {
+      if (p.eaten) {
+        p.eaten = false;
+        p.mesh.visible = true;
+      }
+    }
+
+    // Run standard pellet floating animation
+    if (p.mesh.userData && p.mesh.userData.update) {
+      p.mesh.userData.update(menuElapsedTime);
+    }
+  });
+
+  // Render the menu scene
+  menuRenderer.render(menuScene, menuCamera);
+}
+
+function resizeMenu3D() {
+  if (!menuRenderer || !menuCamera) return;
+  const canvas = document.querySelector('#menu-3d-canvas');
+  if (!canvas) return;
+
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+
+  menuCamera.aspect = width / height;
+  menuCamera.updateProjectionMatrix();
+  menuRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+  menuRenderer.setSize(width, height, false);
+}
+
+function closeLandingMenu() {
+  appContainer.classList.remove('landing-active');
+}
+
+function openShowroomFromMenu() {
+  closeLandingMenu();
+  if (isGameMode) {
+    exitGameMode();
+  }
+  if (isEditorMode) {
+    toggleMode();
+  }
+}
+
+function openEditorFromMenu() {
+  closeLandingMenu();
+  if (isGameMode) {
+    exitGameMode();
+  }
+  if (!isEditorMode) {
+    toggleMode();
+  }
+}
+
+function openGameFromMenu() {
+  closeLandingMenu();
+  if (!isGameMode) {
+    enterGameMode();
+  }
+}
+
 function getGameInputIntent(key) {
   if (key === 'arrowup' || key === 'w') return 'forward';
   if (key === 'arrowright' || key === 'd') return 'right';
@@ -1794,6 +2066,9 @@ zoomSlider.addEventListener('input', (e) => {
 
 document.querySelector('#btn-toggle-mode').addEventListener('click', toggleMode);
 document.querySelector('#btn-toggle-game').addEventListener('click', toggleGameMode);
+document.querySelector('#btn-menu-start').addEventListener('click', openGameFromMenu);
+document.querySelector('#btn-menu-editor').addEventListener('click', openEditorFromMenu);
+document.querySelector('#btn-menu-showroom').addEventListener('click', openShowroomFromMenu);
 document.querySelector('#btn-reset-pellets').addEventListener('click', () => {
   if (pelletManager) {
     pelletManager.reset();
@@ -3077,6 +3352,28 @@ function animate() {
     }
   }
 
+  // --- 3D Landing Menu Update Loop ---
+  const isLandingMenuVisible = appContainer.classList.contains('landing-active');
+  if (isLandingMenuVisible) {
+    if (!menuScene) {
+      initMenu3D();
+    }
+    updateMenu3D(elapsedTime, deltaTime);
+    requestAnimationFrame(animate);
+    return;
+  } else {
+    if (menuScene) {
+      if (menuRenderer) menuRenderer.dispose();
+      menuScene = null;
+      menuCamera = null;
+      menuRenderer = null;
+      menuPacman = null;
+      menuScaredGhost = null;
+      menuClyde = null;
+      menuPellets = [];
+    }
+  }
+
   floatingDust.rotation.y = elapsedTime * 0.01;
   if (!isGameMode) {
     controls.update();
@@ -3092,4 +3389,5 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  resizeMenu3D();
 });
