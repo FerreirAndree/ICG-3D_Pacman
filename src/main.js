@@ -208,13 +208,88 @@ const uiHtml = `
     <div class="landing-menu-container">
       <div id="menu-3d-container">
         <canvas id="menu-3d-canvas"></canvas>
-      </div>
-      <div class="landing-content">
-        <h1>3D Pacman</h1>
+      </div>      <div class="landing-content">
+        <div class="landing-logo" aria-label="3D Pacman">
+          <div class="logo-top">            <svg class="logo-svg-top" viewBox="0 0 1538 780">
+              <g transform="translate(40, 40)">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="32" d="M266 712Q192 712 121 692.50Q50 673-1 637L62 513Q102 543 154.50 559.50Q207 576 262 576Q323 576 358 552.50Q393 529 393 486Q393 447 362 423.50Q331 400 262 400L188 400L188 293L331 130L34 130L34 0L524 0L524 105L366 284Q460 300 508 354Q556 408 556 486Q556 545 525 596.50Q494 648 429.50 680Q365 712 266 712" />
+                <path transform="translate(632, 0)" stroke-linecap="round" stroke-linejoin="round" stroke-width="32" d="M401 700L83 700L83 0L401 0Q515 0 602 43.50Q689 87 738 165.50Q787 244 787 350Q787 456 738 534.50Q689 613 602 656.50Q515 700 401 700M245 133L245 567L393 567Q463 567 514.50 540.50Q566 514 594.50 465.50Q623 417 623 350Q623 283 594.50 234.50Q566 186 514.50 159.50Q463 133 393 133" />
+              </g>
+            </svg>
+          </div>
+          <div class="logo-word">
+            <span class="logo-letter">
+              <svg viewBox="0 0 792 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M245 700L83 700L83 0L386 0Q479 0 547.50 30.50Q616 61 653 118Q690 175 690 254Q690 332 653 389Q616 446 547.50 476.50Q479 507 386 507L245 507L245 700M245 132L245 375L377 375Q451 375 488.50 343Q526 311 526 254Q526 196 488.50 164Q451 132 377 132" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 826 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M383 0L766 700L0 700ZM383 380L465 530L301 530Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 784 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M418 712Q337 712 267.50 685Q198 658 147 609.50Q96 561 67.50 495Q39 429 39 350Q39 271 67.50 205Q96 139 147.50 90.50Q199 42 268 15Q337-12 419-12Q510-12 584 20Q658 52 707 112L603 208Q531 126 427 126Q361 126 310.50 154.50Q260 183 231.50 233.50Q203 284 203 350Q203 416 231.50 466.50Q260 517 310.50 545.50Q361 574 427 574Q531 574 603 491L707 587Q658 648 584 680Q510 712 418 712" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 1015 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M235 700L83 700L83 0L217 0L479 435L737 0L870 0L872 700L720 700L719 281L513 626L440 626L235 288" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 826 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M383 0L766 700L0 700ZM383 380L465 530L301 530Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 868 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M243 700L83 700L83 0L217 0L565 426L565 0L725 0L725 700L592 700L243 274" />
+                </g>
+              </svg>
+            </span>
+          </div>
+        </div>
         <div class="landing-actions">
-          <button class="landing-action primary" id="btn-menu-start">Start Game</button>
-          <button class="landing-action" id="btn-menu-editor">Create Map</button>
-          <button class="landing-action" id="btn-menu-showroom">Showroom</button>
+          <button class="landing-action btn-yellow" id="btn-menu-start">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M13 3C15.1523 3 17.1281 3.7555 18.6768 5.01576L20.124 6.46299L18.8288 7.75818L18.828 7.75738L14.5854 12L18.2236 15.6383L18.2224 15.6396L20.1273 17.5445L18.7144 18.9575L18.7122 18.9553C17.1583 20.2329 15.1687 21 13 21C8.02944 21 4 16.9706 4 12C4 7.02944 8.02944 3 13 3ZM11.7569 12L17.2893 17.5323C16.1044 18.4523 14.6162 19 13 19C9.13401 19 6 15.866 6 12C6 8.13401 9.13401 5 13 5C14.6162 5 16.1045 5.54772 17.2893 6.46768L11.7569 12Z" fill="currentColor"/>
+            </svg>
+            <span>Start Game</span>
+          </button>
+          <button class="landing-action btn-blue" id="btn-menu-editor">
+            <svg class="btn-icon" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2" />
+              <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+              <line x1="2" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <line x1="18" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <span>Create Map</span>
+          </button>
+          <button class="landing-action btn-blue" id="btn-menu-showroom">
+            <svg class="btn-icon" viewBox="0 0 512 512" fill="none">
+              <g stroke="currentColor" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M 104 404 L 104 198 C 104 118 168 70 256 70 C 344 70 408 118 408 198 L 408 404 L 368 368 L 312 420 L 256 370 L 200 420 L 144 368 L 104 404 Z"/>
+                <circle cx="200" cy="216" r="34"/>
+                <circle cx="312" cy="216" r="34"/>
+              </g>
+            </svg>
+            <span>Showroom</span>
+          </button>
         </div>
       </div>
     </div>
@@ -327,8 +402,8 @@ let menuPacman = null;
 let menuScaredGhost = null;
 let menuClyde = null;
 let menuPellets = [];
-const MENU_TRACK_WIDTH = 42;
-const MENU_TRACK_HEIGHT = 30;
+const MENU_TRACK_WIDTH = 54;
+const MENU_TRACK_HEIGHT = 38;
 const MENU_PACMAN_SPEED = 12.0; // Units per second
 let menuElapsedTime = 0;
 const gameCameraState = {
@@ -1712,7 +1787,7 @@ function initMenu3D() {
 
   menuScene = new THREE.Scene();
 
-  menuCamera = new THREE.PerspectiveCamera(46, width / height, 0.1, 100);
+  menuCamera = new THREE.PerspectiveCamera(54, width / height, 0.1, 100);
   // Position camera overhead with a tilt to emphasize 3D depth, looking down at the center.
   menuCamera.position.set(0, 45.0, 8.0);
   menuCamera.up.set(0, 1, 0);
@@ -1760,11 +1835,9 @@ function initMenu3D() {
   // Spawn pellets
   const perimeter = 2 * (MENU_TRACK_WIDTH + MENU_TRACK_HEIGHT);
   const pelletSpacing = 3.0;
-  const numPellets = Math.floor(perimeter / pelletSpacing);
   
   menuPellets = [];
-  for (let i = 0; i < numPellets; i++) {
-    const pDist = i * pelletSpacing;
+  const addMenuPellet = (pDist) => {
     const pellet = createStandardPellet();
     pellet.scale.setScalar(1.4); // Standard pellet has radius 0.35. 1.4 makes it radius 0.49, perfect miniature.
     const info = getMenuTrackPosition(pDist);
@@ -1776,7 +1849,24 @@ function initMenu3D() {
       dist: pDist,
       eaten: false
     });
-  }
+  };
+
+  const sideLengths = [
+    MENU_TRACK_WIDTH,
+    MENU_TRACK_HEIGHT,
+    MENU_TRACK_WIDTH,
+    MENU_TRACK_HEIGHT
+  ];
+  let sideStartDistance = 0;
+  sideLengths.forEach((sideLength, sideIndex) => {
+    const segmentCount = Math.max(1, Math.round(sideLength / pelletSpacing));
+    for (let segmentIndex = 0; segmentIndex <= segmentCount; segmentIndex += 1) {
+      if (sideIndex > 0 && segmentIndex === 0) continue;
+      if (sideIndex === sideLengths.length - 1 && segmentIndex === segmentCount) continue;
+      addMenuPellet(sideStartDistance + (sideLength * segmentIndex) / segmentCount);
+    }
+    sideStartDistance += sideLength;
+  });
 
   menuElapsedTime = 0;
 }
