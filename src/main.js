@@ -1414,6 +1414,31 @@ function updatePauseSoundButton() {
   }
 }
 
+function syncContinuousAudioState() {
+  if (!isPowerPelletActive()) {
+    audioManager.stop('powerPellet');
+    return;
+  }
+
+  if (!audioManager.isEnabled() || isGamePaused) return;
+
+  if (!audioManager.isPlaying('powerPellet')) {
+    audioManager.play('powerPellet', { loop: true });
+  }
+}
+
+function toggleSoundSetting() {
+  audioManager.unlock();
+  audioManager.toggle();
+  if (isGamePaused) {
+    audioManager.suspend();
+  } else {
+    audioManager.resume();
+    syncContinuousAudioState();
+  }
+  updatePauseSoundButton();
+}
+
 function showPauseOverlay() {
   const isDevMode = appContainer.classList.contains('dev-tools-active');
   if (isDevMode) return;
@@ -3182,6 +3207,7 @@ function exitGameMode() {
   hidePauseOverlay();
   clearFloatingScores();
   audioManager.stopAll();
+  hasPlayedStartMusicThisRun = false;
   setGameStartOverlayVisible(false);
   resetGameLookControls();
   isJumpscareMode = false;
@@ -4196,12 +4222,7 @@ document.querySelector('#btn-game-pause-controls').addEventListener('click', () 
 });
 
 document.querySelector('#btn-game-pause-sound').addEventListener('click', () => {
-  audioManager.unlock();
-  audioManager.toggle();
-  if (isGamePaused) {
-    audioManager.suspend();
-  }
-  updatePauseSoundButton();
+  toggleSoundSetting();
 });
 
 document.querySelector('#btn-game-pause-controls-back').addEventListener('click', () => {
@@ -4224,12 +4245,7 @@ document.querySelector('#btn-hud-pause').addEventListener('click', (e) => {
 
 document.querySelector('#btn-hud-sound').addEventListener('click', (e) => {
   e.currentTarget.blur();
-  audioManager.unlock();
-  audioManager.toggle();
-  if (isGamePaused) {
-    audioManager.suspend();
-  }
-  updatePauseSoundButton();
+  toggleSoundSetting();
 });
 
 document.addEventListener('pointerdown', () => audioManager.unlock(), { once: true });

@@ -18,6 +18,8 @@ export class AudioManager {
     this.buffers = new Map();
     this.loading = new Map();
     this.activeSources = new Map();
+    this.loopSources = new Map();
+    this.playVersions = new Map();
     this.didPlayUnlockPulse = false;
   }
 
@@ -45,9 +47,11 @@ export class AudioManager {
     this.enabled = Boolean(enabled);
     this.persistEnabledPreference();
 
-    if (!this.enabled) {
-      this.stopAll();
-    } else {
+    if (this.masterGain) {
+      this.masterGain.gain.value = this.enabled ? 1 : 0;
+    }
+
+    if (this.enabled) {
       this.unlock();
     }
 
@@ -79,7 +83,7 @@ export class AudioManager {
 
     this.context = new AudioContextClass();
     this.masterGain = this.context.createGain();
-    this.masterGain.gain.value = 1;
+    this.masterGain.gain.value = this.enabled ? 1 : 0;
     this.masterGain.connect(this.context.destination);
 
     return this.context;
@@ -148,6 +152,10 @@ export class AudioManager {
   async play(id, options = {}) {
     if (!this.enabled) return null;
 
+    if (options.loop) {
+      return this.playLoop(id, options);
+    }
+
     const context = this.ensureContext();
     if (!context) return null;
 
@@ -156,13 +164,14 @@ export class AudioManager {
     }
 
     const definition = SOUND_DEFINITIONS[id];
+    const playVersion = this.getPlayVersion(id);
     const buffer = await this.loadBuffer(id);
-    if (!buffer || !this.enabled) return null;
+    if (!buffer || !this.enabled || this.getPlayVersion(id) !== playVersion) return null;
 
     const source = context.createBufferSource();
     const gain = context.createGain();
     source.buffer = buffer;
-    source.loop = Boolean(options.loop);
+    source.loop = false;
     gain.gain.value = options.volume ?? definition.volume;
     source.connect(gain);
     gain.connect(this.masterGain);
@@ -182,12 +191,62 @@ export class AudioManager {
     return source;
   }
 
+  async playLoop(id, options = {}) {
+    if (!this.enabled) return null;
+
+    this.stop(id);
+
+    const context = this.ensureContext();
+    if (!context) return null;
+
+    if (context.state === 'suspended') {
+      await context.resume().catch(() => {});
+    }
+
+    const definition = SOUND_DEFINITIONS[id];
+    const playVersion = this.getPlayVersion(id);
+    const buffer = await this.loadBuffer(id);
+    if (!buffer || !this.enabled || this.getPlayVersion(id) !== playVersion) return null;
+
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    source.loop = true;
+    gain.gain.value = options.volume ?? definition.volume;
+    source.connect(gain);
+    gain.connect(this.masterGain);
+
+    const loopHandle = { source, gain };
+    this.loopSources.set(id, loopHandle);
+
+    source.onended = () => {
+      if (this.loopSources.get(id) === loopHandle) {
+        this.loopSources.delete(id);
+      }
+    };
+
+    source.start(0);
+    return source;
+  }
+
   restart(id, options = {}) {
     this.stop(id);
     return this.play(id, options);
   }
 
   stop(id) {
+    this.bumpPlayVersion(id);
+    const loopHandle = this.loopSources.get(id);
+    if (loopHandle) {
+      loopHandle.gain.disconnect();
+      try {
+        loopHandle.source.stop(0);
+      } catch {
+        // Already stopped.
+      }
+      this.loopSources.delete(id);
+    }
+
     const sources = this.activeSources.get(id);
     sources?.forEach((source) => {
       try {
@@ -200,6 +259,41 @@ export class AudioManager {
   }
 
   stopAll() {
-    Array.from(this.activeSources.keys()).forEach((id) => this.stop(id));
+    Object.keys(SOUND_DEFINITIONS).forEach((id) => this.bumpPlayVersion(id));
+    Array.from(this.loopSources.keys()).forEach((id) => {
+      const loopHandle = this.loopSources.get(id);
+      if (!loopHandle) return;
+      loopHandle.gain.disconnect();
+      try {
+        loopHandle.source.stop(0);
+      } catch {
+        // Already stopped.
+      }
+      this.loopSources.delete(id);
+    });
+
+    Array.from(this.activeSources.keys()).forEach((id) => {
+      const sources = this.activeSources.get(id);
+      sources?.forEach((source) => {
+        try {
+          source.stop(0);
+        } catch {
+          // Already stopped.
+        }
+      });
+      this.activeSources.delete(id);
+    });
+  }
+
+  getPlayVersion(id) {
+    return this.playVersions.get(id) || 0;
+  }
+
+  isPlaying(id) {
+    return this.loopSources.has(id) || this.activeSources.has(id);
+  }
+
+  bumpPlayVersion(id) {
+    this.playVersions.set(id, this.getPlayVersion(id) + 1);
   }
 }
