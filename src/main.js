@@ -595,23 +595,87 @@ const uiHtml = `
         </div>
       </div>
     </div>
-    <div class="game-hud-overlay game-status-overlay" id="game-victory-overlay" aria-hidden="true">
-      <div class="game-status-modal game-victory-modal">
-        <p class="status-modal-eyebrow">VICTORY</p>
-        <h2 class="status-modal-title">LEVEL COMPLETE</h2>
-        <div class="status-modal-stats">
-          <div class="status-stat-row">
-            <span>Final Score</span>
-            <strong id="game-victory-score">0</strong>
-          </div>
-          <div class="status-stat-row">
-            <span>Pellets Eaten</span>
-            <strong id="game-victory-pellets">0</strong>
+    <div class="game-hud-overlay game-status-overlay game-victory-overlay" id="game-victory-overlay" aria-hidden="true">
+      <div class="pause-menu-content">
+        <div class="game-victory-title">
+          <div class="logo-word">
+            <!-- V -->
+            <span class="logo-letter">
+              <svg viewBox="0 0 660 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0L245 0L330 450L415 0L577 0L411 700L249 700Z" />
+                </g>
+              </svg>
+            </span>
+            <!-- I -->
+            <span class="logo-letter">
+              <svg viewBox="0 0 482 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M160 0L322 0L322 700L160 700Z" />
+                </g>
+              </svg>
+            </span>
+            <!-- C -->
+            <span class="logo-letter">
+              <svg viewBox="0 0 710 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M650 0L83 0L83 700L650 700L650 567L245 567L245 133L650 133Z" />
+                </g>
+              </svg>
+            </span>
+            <!-- T -->
+            <span class="logo-letter">
+              <svg viewBox="0 0 660 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0L600 0L600 133L422 133L422 700L260 700L260 133L83 133Z" />
+                </g>
+              </svg>
+            </span>
+            <!-- O -->
+            <span class="logo-letter">
+              <svg viewBox="0 0 710 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0L600 0L600 700L83 700ZM245 133L245 567L438 567L438 133Z" />
+                </g>
+              </svg>
+            </span>
+            <!-- R -->
+            <span class="logo-letter">
+              <svg viewBox="0 0 792 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 700L83 0L386 0Q479 0 547.50 30.50Q616 61 653 118Q690 175 690 254Q690 332 653 389Q616 446 547.50 476.50L700 700L540 700L386 507L245 507L245 700ZM245 132L245 375L377 375Q451 375 488.50 343Q526 311 526 254Q526 196 488.50 164Q451 132 377 132Z" />
+                </g>
+              </svg>
+            </span>
+            <!-- Y -->
+            <span class="logo-letter">
+              <svg viewBox="0 0 710 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0L245 0L341.5 180L438 0L600 0L422 350L422 700L260 700L260 350Z" />
+                </g>
+              </svg>
+            </span>
           </div>
         </div>
-        <div class="status-modal-actions">
-          <button class="status-btn btn-victory-retry" id="btn-game-victory-retry" type="button">PLAY AGAIN</button>
-          <button class="status-btn btn-menu" id="btn-game-victory-menu" type="button">MAIN MENU</button>
+
+        <div class="game-victory-score-display">
+          SCORE: <span id="game-victory-score">0</span>
+        </div>
+
+        <div class="pause-menu-actions" style="margin-top: 12px;">
+          <button class="landing-action btn-yellow" id="btn-game-victory-retry" type="button">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 4v6h-6"></path>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+            <span>Play Again</span>
+          </button>
+          <button class="landing-action btn-blue" id="btn-game-victory-menu" type="button">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+            <span>Main Menu</span>
+          </button>
         </div>
       </div>
     </div>
@@ -1256,8 +1320,8 @@ function showVictoryOverlay() {
   const overlay = document.querySelector('#game-victory-overlay');
   if (!overlay) return;
 
-  document.querySelector('#game-victory-score').textContent = score;
-  document.querySelector('#game-victory-pellets').textContent = pelletManager ? pelletManager.getEatenCount() : 0;
+  const scoreEl = document.querySelector('#game-victory-score');
+  if (scoreEl) scoreEl.textContent = score;
 
   overlay.classList.add('active');
   overlay.setAttribute('aria-hidden', 'false');
