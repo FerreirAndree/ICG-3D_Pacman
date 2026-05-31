@@ -36,15 +36,6 @@ body::before {
   pointer-events: none;
 }
 
-#app::after {
-  content: 'Drag orbit  •  Wheel zoom  •  Right-drag pan';
-  position: fixed;
-  right: 24px;
-  bottom: 22px;
-  color: rgba(195, 212, 255, 0.5);
-  font-size: 0.76rem;
-  letter-spacing: 0.08em;
-}
 
 canvas {
   display: block;
@@ -1894,6 +1885,17 @@ input[type="range"]::-webkit-slider-thumb:hover {
   display: none !important;
 }
 
+/* Hide game HUD and overlays in dev mode */
+.dev-tools-active .game-hud-header,
+.dev-tools-active .game-hud-lives,
+.dev-tools-active .game-countdown-overlay,
+.dev-tools-active .game-pause-overlay,
+.dev-tools-active .game-over-overlay,
+.dev-tools-active #game-victory-overlay {
+  display: none !important;
+}
+
+
 /* Top HUD Header */
 .game-hud-header {
   position: absolute;
@@ -1975,40 +1977,77 @@ input[type="range"]::-webkit-slider-thumb:hover {
   justify-content: center;
   pointer-events: none;
   z-index: 15;
+  transform: translateY(-140px); /* Shift upward to clear Pacman start spot */
 }
 
 .game-countdown-overlay.active {
   display: flex;
 }
 
-.countdown-text {
-  font-family: 'Century Gothic', 'Futura', 'Trebuchet MS', sans-serif;
-  font-size: clamp(4rem, 12vw, 7.5rem);
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  text-shadow: 0 0 30px currentColor;
-  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+.game-ready-title {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  max-width: 480px;
+  animation: countdown-ready-pulse 0.6s infinite alternate;
 }
 
-.countdown-ready .countdown-text {
-  color: #ffd91f;
-  animation: countdown-pulse 1s infinite alternate;
+.game-ready-title .logo-word {
+  margin-top: 0;
+  display: flex;
+  justify-content: center;
+  gap: clamp(8px, 1.8vw, 14px);
+  width: 100%;
 }
 
-.countdown-go .countdown-text {
-  color: #00ffaa;
-  animation: countdown-pop 0.9s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+.game-ready-title .logo-letter {
+  height: clamp(2.5rem, 8vw, 4.5rem);
 }
 
-@keyframes countdown-pulse {
+.game-ready-title .logo-letter svg {
+  stroke: #ff9f1f;
+  filter:
+    drop-shadow(0 0 6px #ff9f1f)
+    drop-shadow(0 0 16px rgba(255, 159, 31, 0.6))
+    drop-shadow(0 0 32px rgba(255, 159, 31, 0.3));
+}
+
+.game-go-title {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  max-width: 320px;
+  animation: countdown-pop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.game-go-title .logo-word {
+  margin-top: 0;
+  display: flex;
+  justify-content: center;
+  gap: clamp(8px, 1.8vw, 14px);
+  width: 100%;
+}
+
+.game-go-title .logo-letter {
+  height: clamp(2.8rem, 9vw, 5rem);
+}
+
+.game-go-title .logo-letter svg {
+  stroke: #00ffaa;
+  filter:
+    drop-shadow(0 0 6px #00ffaa)
+    drop-shadow(0 0 16px rgba(0, 255, 170, 0.6))
+    drop-shadow(0 0 32px rgba(0, 255, 170, 0.3));
+}
+
+@keyframes countdown-ready-pulse {
   from {
     transform: scale(0.9);
-    filter: drop-shadow(0 0 10px rgba(255, 217, 31, 0.4));
   }
   to {
-    transform: scale(1.1);
-    filter: drop-shadow(0 0 35px rgba(255, 217, 31, 0.85));
+    transform: scale(1.08);
   }
 }
 

@@ -444,7 +444,72 @@ const uiHtml = `
       </div>
     </div>
     <div class="game-countdown-overlay" id="game-countdown-overlay" aria-hidden="true">
-      <div class="countdown-text" id="game-countdown-text">READY</div>
+      <!-- READY Title -->
+      <div class="game-ready-title" id="countdown-ready-title">
+        <div class="logo-word">
+          <span class="logo-letter">
+            <svg viewBox="0 0 792 760">
+              <g transform="translate(30, 30)">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 700L83 0L386 0Q479 0 547.50 30.50Q616 61 653 118Q690 175 690 254Q690 332 653 389Q616 446 547.50 476.50L700 700L540 700L386 507L245 507L245 700ZM245 132L245 375L377 375Q451 375 488.50 343Q526 311 526 254Q526 196 488.50 164Q451 132 377 132Z" />
+              </g>
+            </svg>
+          </span>
+          <span class="logo-letter">
+            <svg viewBox="0 0 660 760">
+              <g transform="translate(30, 30)">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0 L600 0 L600 133 L245 133 L245 285 L500 285 L500 415 L245 415 L245 567 L600 567 L600 700 L83 700 Z" />
+              </g>
+            </svg>
+          </span>
+          <span class="logo-letter">
+            <svg viewBox="0 0 826 760">
+              <g transform="translate(30, 30)">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M383 0L766 700L0 700ZM383 380L465 530L301 530Z" />
+              </g>
+            </svg>
+          </span>
+          <span class="logo-letter">
+            <svg viewBox="0 0 847 760">
+              <g transform="translate(30, 30)">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M401 700L83 700L83 0L401 0Q515 0 602 43.50Q689 87 738 165.50Q787 244 787 350Q787 456 738 534.50Q689 613 602 656.50Q515 700 401 700M245 133L245 567L393 567Q463 567 514.50 540.50Q566 514 594.50 465.50Q623 417 623 350Q623 283 594.50 234.50Q566 186 514.50 159.50Q463 133 393 133" />
+              </g>
+            </svg>
+          </span>
+          <span class="logo-letter">
+            <svg viewBox="0 0 710 760">
+              <g transform="translate(30, 30)">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0 L245 0 L341.5 180 L438 0 L600 0 L422 350 L422 700 L260 700 L260 350 Z" />
+              </g>
+            </svg>
+          </span>
+        </div>
+      </div>
+      <!-- GO! Title -->
+      <div class="game-go-title" id="countdown-go-title" style="display: none;">
+        <div class="logo-word">
+          <span class="logo-letter">
+            <svg viewBox="0 0 710 760">
+              <g transform="translate(30, 30)">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M650 0 L83 0 L83 700 L650 700 L650 350 L380 350 L380 483 L488 483 L488 567 L245 567 L245 133 L650 133 Z" />
+              </g>
+            </svg>
+          </span>
+          <span class="logo-letter">
+            <svg viewBox="0 0 710 760">
+              <g transform="translate(30, 30)">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0 L600 0 L600 700 L83 700 Z M245 133 L245 567 L438 567 L438 133 Z" />
+              </g>
+            </svg>
+          </span>
+          <span class="logo-letter">
+            <svg viewBox="0 0 482 760">
+              <g transform="translate(30, 30)">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M260 0 L422 0 L422 450 L260 450 Z M260 538 L422 538 L422 700 L260 700 Z" />
+              </g>
+            </svg>
+          </span>
+        </div>
+      </div>
     </div>
     <div class="game-hud-overlay game-status-overlay game-over-overlay" id="game-over-overlay" aria-hidden="true">
       <div class="pause-menu-content">
@@ -766,7 +831,7 @@ let isLevelComplete = false;
 let score = 0;
 let isCountdownActive = false;
 let countdownTimer = 0;
-const COUNTDOWN_DURATION = 2.0;
+const COUNTDOWN_DURATION = 1.2;
 let isGamePaused = false;
 let powerPelletTimer = 0;
 let activePowerPelletDuration = 0;
@@ -1104,36 +1169,49 @@ function startCountdown() {
 
   isCountdownActive = true;
   countdownTimer = COUNTDOWN_DURATION;
-  updateCountdownUi();
+  
+  const overlay = document.querySelector('#game-countdown-overlay');
+  const readyTitle = document.querySelector('#countdown-ready-title');
+  const goTitle = document.querySelector('#countdown-go-title');
+  if (overlay) {
+    overlay.classList.add('active');
+    overlay.className = 'game-countdown-overlay active countdown-ready';
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+  if (readyTitle) readyTitle.style.display = 'flex';
+  if (goTitle) goTitle.style.display = 'none';
 }
 
 function updateCountdown(deltaTime) {
   if (!isCountdownActive) return;
 
   countdownTimer = Math.max(0, countdownTimer - deltaTime);
-  updateCountdownUi();
 
   if (countdownTimer <= 0) {
-    isCountdownActive = false;
-    hideCountdownUi();
+    isCountdownActive = false; // Unfreeze game!
+    
+    // Switch to GO! and trigger animation
+    const overlay = document.querySelector('#game-countdown-overlay');
+    const readyTitle = document.querySelector('#countdown-ready-title');
+    const goTitle = document.querySelector('#countdown-go-title');
+    
+    if (overlay) {
+      overlay.className = 'game-countdown-overlay active countdown-go';
+    }
+    if (readyTitle) readyTitle.style.display = 'none';
+    if (goTitle) goTitle.style.display = 'flex';
+    
+    // Hide overlay after 800ms
+    setTimeout(() => {
+      if (!isCountdownActive) {
+        hideCountdownUi();
+      }
+    }, 800);
   }
 }
 
 function updateCountdownUi() {
-  const overlay = document.querySelector('#game-countdown-overlay');
-  const text = document.querySelector('#game-countdown-text');
-  if (!overlay || !text) return;
-
-  overlay.classList.add('active');
-  overlay.setAttribute('aria-hidden', 'false');
-
-  if (countdownTimer > 1.0) {
-    overlay.className = 'game-countdown-overlay active countdown-ready';
-    text.textContent = 'READY';
-  } else if (countdownTimer > 0.0) {
-    overlay.className = 'game-countdown-overlay active countdown-go';
-    text.textContent = 'GO!';
-  }
+  // Deprecated - state is managed inside startCountdown and updateCountdown directly now
 }
 
 function hideCountdownUi() {
@@ -1146,6 +1224,9 @@ function hideCountdownUi() {
 }
 
 function showGameOverOverlay() {
+  const isDevMode = appContainer.classList.contains('dev-tools-active');
+  if (isDevMode) return;
+
   const overlay = document.querySelector('#game-over-overlay');
   if (!overlay) return;
 
@@ -1168,6 +1249,9 @@ function hideGameOverOverlay() {
 }
 
 function showVictoryOverlay() {
+  const isDevMode = appContainer.classList.contains('dev-tools-active');
+  if (isDevMode) return;
+
   const overlay = document.querySelector('#game-victory-overlay');
   if (!overlay) return;
 
@@ -1190,6 +1274,9 @@ function hideVictoryOverlay() {
 }
 
 function showPauseOverlay() {
+  const isDevMode = appContainer.classList.contains('dev-tools-active');
+  if (isDevMode) return;
+
   const overlay = document.querySelector('#game-pause-overlay');
   if (!overlay) return;
 
