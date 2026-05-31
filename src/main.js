@@ -14,6 +14,7 @@ import { buildMazeGraph, DEFAULT_GAME_MAP, DIRECTIONS, STARTER_GRID_MAP, getAbso
 import { EntityController } from './pacmanController.js';
 import { PelletManager, PELLET_TYPES } from './pelletManager.js';
 import { GhostAIController } from './ghostAIController.js';
+import { AudioManager } from './audioManager.js';
 import { navigateTo, registerRoutes } from './navigation.js';
 import './style.css';
 
@@ -432,6 +433,18 @@ const uiHtml = `
       </button>
     </div>
     <div class="game-hud-lives" id="game-hud-lives"></div>
+    <button class="game-hud-sound-button" id="btn-hud-sound" type="button" aria-label="Turn sound off">
+      <svg class="hud-sound-icon hud-sound-icon-on" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <polygon points="11 5 6 9 3 9 3 15 6 15 11 19 11 5"></polygon>
+        <path d="M15 9.5a4 4 0 0 1 0 5"></path>
+        <path d="M18 7a8 8 0 0 1 0 10"></path>
+      </svg>
+      <svg class="hud-sound-icon hud-sound-icon-off" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <polygon points="11 5 6 9 3 9 3 15 6 15 11 19 11 5"></polygon>
+        <path d="M20 9 14 15"></path>
+        <path d="m14 9 6 6"></path>
+      </svg>
+    </button>
     <div class="game-start-overlay" id="game-start-overlay" aria-hidden="true">
       <div class="game-start-modal">
         <h2 class="game-start-title">Controls</h2>
@@ -773,6 +786,14 @@ const uiHtml = `
             </svg>
             <span>Controls</span>
           </button>
+          <button class="landing-action btn-blue" id="btn-game-pause-sound" type="button">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 3 9 3 15 6 15 11 19 11 5"></polygon>
+              <path d="M15 9.5a4 4 0 0 1 0 5"></path>
+              <path d="M18 7a8 8 0 0 1 0 10"></path>
+            </svg>
+            <span id="pause-sound-label">Sound: On</span>
+          </button>
           <button class="landing-action btn-blue" id="btn-game-pause-menu" type="button">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
               <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
@@ -884,6 +905,8 @@ let activeController = null;
 let activePuppet = 'pacman';
 let pacmanSpawnState = null;
 let pelletManager = new PelletManager(gameMaze);
+const audioManager = new AudioManager();
+window.pacmanAudio = audioManager;
 let isGameMode = false;
 let isGameStartOverlayActive = false;
 let isGameLookBackActive = false;
@@ -900,12 +923,15 @@ let score = 0;
 let isCountdownActive = false;
 let countdownTimer = 0;
 const COUNTDOWN_DURATION = 1.2;
+const START_MUSIC_COUNTDOWN_DURATION = 3.25;
 let isGamePaused = false;
 let powerPelletTimer = 0;
 let activePowerPelletDuration = 0;
 let ghostsEatenThisPower = 0;
 let activeFloatingScores = [];
 let activeGhostCount = 4;
+let nextPelletSoundIndex = 0;
+let hasPlayedStartMusicThisRun = false;
 let currentGameGraph = null;
 let selectedGameMapId = 'classic';
 let selectedMapGhostCount = 4;
@@ -1259,8 +1285,16 @@ function startCountdown() {
   const isDevMode = appContainer.classList.contains('dev-tools-active');
   if (isDevMode) return;
 
+  const shouldPlayStartMusic = !hasPlayedStartMusicThisRun;
+  if (shouldPlayStartMusic) {
+    audioManager.restart('startMusic');
+    hasPlayedStartMusicThisRun = true;
+  }
+
   isCountdownActive = true;
-  countdownTimer = COUNTDOWN_DURATION;
+  countdownTimer = shouldPlayStartMusic
+    ? START_MUSIC_COUNTDOWN_DURATION
+    : COUNTDOWN_DURATION;
   
   const overlay = document.querySelector('#game-countdown-overlay');
   const readyTitle = document.querySelector('#countdown-ready-title');
@@ -1365,6 +1399,21 @@ function hideVictoryOverlay() {
   }
 }
 
+function updatePauseSoundButton() {
+  const label = document.querySelector('#pause-sound-label');
+  if (label) {
+    label.textContent = audioManager.isEnabled() ? 'Sound: On' : 'Sound: Off';
+  }
+
+  const hudButton = document.querySelector('#btn-hud-sound');
+  if (hudButton) {
+    const enabled = audioManager.isEnabled();
+    hudButton.classList.toggle('muted', !enabled);
+    hudButton.setAttribute('aria-label', enabled ? 'Turn sound off' : 'Turn sound on');
+    hudButton.title = enabled ? 'Sound on' : 'Sound off';
+  }
+}
+
 function showPauseOverlay() {
   const isDevMode = appContainer.classList.contains('dev-tools-active');
   if (isDevMode) return;
@@ -1373,6 +1422,7 @@ function showPauseOverlay() {
   if (!overlay) return;
 
   isGamePaused = true;
+  audioManager.suspend();
   overlay.classList.add('active');
   overlay.setAttribute('aria-hidden', 'false');
 
@@ -1381,6 +1431,7 @@ function showPauseOverlay() {
   const controlsPanel = document.querySelector('#pause-controls-panel');
   if (mainActions) mainActions.style.display = 'flex';
   if (controlsPanel) controlsPanel.style.display = 'none';
+  updatePauseSoundButton();
 
   const pauseBtn = document.querySelector('#btn-hud-pause');
   if (pauseBtn) pauseBtn.style.display = 'none';
@@ -1393,6 +1444,7 @@ function hidePauseOverlay() {
     overlay.setAttribute('aria-hidden', 'true');
   }
   isGamePaused = false;
+  audioManager.resume();
 
   const pauseBtn = document.querySelector('#btn-hud-pause');
   if (pauseBtn) pauseBtn.style.display = '';
@@ -1408,6 +1460,14 @@ function addPelletScore(eatenPellets) {
 
   score += eatenPellets.reduce((total, pellet) => total + getPelletScore(pellet.type), 0);
   updateScoreUi();
+}
+
+function playStandardPelletSound(eatenPellets) {
+  if (!eatenPellets.some((pellet) => pellet.type === PELLET_TYPES.STANDARD)) return;
+
+  const soundId = nextPelletSoundIndex % 2 === 0 ? 'pelletA' : 'pelletB';
+  nextPelletSoundIndex += 1;
+  audioManager.play(soundId);
 }
 
 function getNextGhostScore() {
@@ -1745,6 +1805,7 @@ function updateGhostHouseState(deltaTime) {
 }
 
 function startPowerPelletState() {
+  audioManager.restart('powerPellet', { loop: true });
   activePowerPelletDuration = getPowerPelletDuration();
   powerPelletTimer = activePowerPelletDuration;
   ghostsEatenThisPower = 0;
@@ -1768,6 +1829,7 @@ function startPowerPelletState() {
 }
 
 function clearPowerPelletState() {
+  audioManager.stop('powerPellet');
   powerPelletTimer = 0;
   activePowerPelletDuration = 0;
   ghostsEatenThisPower = 0;
@@ -1783,6 +1845,7 @@ function updatePowerPelletState(deltaTime) {
 
   powerPelletTimer = Math.max(0, powerPelletTimer - deltaTime);
   if (powerPelletTimer === 0) {
+    audioManager.stop('powerPellet');
     activePowerPelletDuration = 0;
     ghostsEatenThisPower = 0;
     setPacmanPowerVisual(false);
@@ -1827,6 +1890,7 @@ function startGhostRespawnDelay(ghostOrEntry = getPrimaryGhostEntry()) {
   const entry = resolveGhostEntry(ghostOrEntry);
   if (!entry || isGhostRespawning(entry)) return;
 
+  audioManager.play('ghostEaten');
   const state = getGhostPowerState(entry);
   if (state) state.eatenDuringCurrentPower = true;
   if (state) state.recoveringFromEaten = true;
@@ -2676,6 +2740,7 @@ function isCaptureResolving() {
 function startPacmanCaptureResolve() {
   if (isCaptureResolving()) return;
 
+  audioManager.play('death');
   clearPowerPelletState();
   captureResolveTimer = PACMAN_CAPTURE_RESOLVE_DURATION;
   if (gamePacman?.playDeathAnimation) {
@@ -2703,11 +2768,14 @@ function finishPacmanCaptureResolve() {
 function completeLevel() {
   isLevelComplete = true;
   captureResolveTimer = 0;
+  audioManager.stopAll();
   updateLivesUi();
   showVictoryOverlay();
 }
 
 function restartGameRun() {
+  audioManager.stopAll();
+  hasPlayedStartMusicThisRun = false;
   livesRemaining = STARTING_LIVES;
   isGameOver = false;
   isLevelComplete = false;
@@ -2727,6 +2795,8 @@ function restartGameRun() {
 }
 
 function rebuildGameRun() {
+  audioManager.stopAll();
+  hasPlayedStartMusicThisRun = false;
   const wasGhostAiEnabled = isGhostAiEnabled();
 
   captureResolveTimer = 0;
@@ -3062,6 +3132,7 @@ function enterGameMode(options = {}) {
   updateJumpscareButton();
   updateCollisionsButton();
   updateGhostCountButton();
+  updatePauseSoundButton();
   updateLivesUi();
   updateScoreUi();
 
@@ -3110,6 +3181,7 @@ function exitGameMode() {
   hideVictoryOverlay();
   hidePauseOverlay();
   clearFloatingScores();
+  audioManager.stopAll();
   setGameStartOverlayVisible(false);
   resetGameLookControls();
   isJumpscareMode = false;
@@ -4123,6 +4195,15 @@ document.querySelector('#btn-game-pause-controls').addEventListener('click', () 
   if (controlsPanel) controlsPanel.style.display = 'flex';
 });
 
+document.querySelector('#btn-game-pause-sound').addEventListener('click', () => {
+  audioManager.unlock();
+  audioManager.toggle();
+  if (isGamePaused) {
+    audioManager.suspend();
+  }
+  updatePauseSoundButton();
+});
+
 document.querySelector('#btn-game-pause-controls-back').addEventListener('click', () => {
   const controlsPanel = document.querySelector('#pause-controls-panel');
   const mainActions = document.querySelector('#pause-main-actions');
@@ -4140,6 +4221,19 @@ document.querySelector('#btn-hud-pause').addEventListener('click', (e) => {
   if (!isGameMode || isGamePaused || isGameOver || isLevelComplete) return;
   showPauseOverlay();
 });
+
+document.querySelector('#btn-hud-sound').addEventListener('click', (e) => {
+  e.currentTarget.blur();
+  audioManager.unlock();
+  audioManager.toggle();
+  if (isGamePaused) {
+    audioManager.suspend();
+  }
+  updatePauseSoundButton();
+});
+
+document.addEventListener('pointerdown', () => audioManager.unlock(), { once: true });
+document.addEventListener('keydown', () => audioManager.unlock(), { once: true });
 
 registerRoutes({
   '/menu': {
@@ -4193,6 +4287,7 @@ document.querySelector('#btn-reset-run').addEventListener('click', () => {
 });
 
 document.querySelector('#btn-game-start').addEventListener('click', () => {
+  audioManager.unlock();
   setGameStartOverlayVisible(false);
 });
 
@@ -5152,7 +5247,9 @@ function updatePulseMeshes(elapsedTime) {
 }
 
 function animate() {
-  const deltaTime = Math.min(clock.getDelta(), 0.05);
+  const rawDeltaTime = clock.getDelta();
+  const deltaTime = Math.min(rawDeltaTime, 0.05);
+  const resolveDeltaTime = Math.min(rawDeltaTime, 0.25);
   const elapsedTime = clock.elapsedTime;
 
   updatePulseMeshes(elapsedTime);
@@ -5238,9 +5335,9 @@ function animate() {
       pelletManager.update(elapsedTime);
       updateGameCamera(deltaTime, false);
     } else if (isCaptureResolving()) {
-      captureResolveTimer = Math.max(0, captureResolveTimer - deltaTime);
+      captureResolveTimer = Math.max(0, captureResolveTimer - resolveDeltaTime);
 
-      if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime, deltaTime);
+      if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime, resolveDeltaTime);
       forEachGhost((entry) => {
         if (entry.model.visible && entry.model.userData.update) entry.model.userData.update(elapsedTime);
       });
@@ -5298,6 +5395,7 @@ function animate() {
       const eatenPelletsThisFrame = pelletManager.checkCollisions(gamePacman.position);
       if (eatenPelletsThisFrame.length > 0) {
         addPelletScore(eatenPelletsThisFrame);
+        playStandardPelletSound(eatenPelletsThisFrame);
         if (didEatPowerPellet(eatenPelletsThisFrame)) {
           startPowerPelletState();
         }

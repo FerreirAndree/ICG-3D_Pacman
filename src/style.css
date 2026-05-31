@@ -1756,6 +1756,68 @@ input[type="range"]::-webkit-slider-thumb:hover {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
+.game-hud-sound-button {
+  position: absolute;
+  right: 28px;
+  bottom: 28px;
+  border: none;
+  background: transparent;
+  color: var(--logo-blue);
+  cursor: pointer;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  filter:
+    drop-shadow(0 0 2px var(--logo-blue))
+    drop-shadow(0 0 7px rgba(0, 34, 255, 0.72))
+    drop-shadow(0 0 14px rgba(0, 34, 255, 0.4));
+  transition: transform 0.2s ease, color 0.2s ease, filter 0.2s ease;
+}
+
+.game-hud-sound-button:hover {
+  transform: scale(1.15);
+  color: #163dff;
+  filter:
+    drop-shadow(0 0 4px var(--logo-blue))
+    drop-shadow(0 0 12px rgba(0, 34, 255, 0.88))
+    drop-shadow(0 0 22px rgba(0, 34, 255, 0.58));
+}
+
+.hud-sound-icon {
+  width: 34px;
+  height: 34px;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hud-sound-icon polygon {
+  fill: currentColor;
+  stroke: none;
+}
+
+.game-hud-sound-button .hud-sound-icon-off {
+  display: none;
+}
+
+.game-hud-sound-button.muted {
+  color: rgba(0, 34, 255, 0.5);
+  filter:
+    drop-shadow(0 0 2px rgba(0, 34, 255, 0.48))
+    drop-shadow(0 0 8px rgba(0, 34, 255, 0.24));
+}
+
+.game-hud-sound-button.muted .hud-sound-icon-on {
+  display: none;
+}
+
+.game-hud-sound-button.muted .hud-sound-icon-off {
+  display: block;
+}
+
 .game-start-overlay {
   position: absolute;
   inset: 0;
@@ -1888,6 +1950,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 /* Hide game HUD and overlays in dev mode */
 .dev-tools-active .game-hud-header,
 .dev-tools-active .game-hud-lives,
+.dev-tools-active .game-hud-sound-button,
 .dev-tools-active .game-countdown-overlay,
 .dev-tools-active .game-pause-overlay,
 .dev-tools-active .game-over-overlay,
@@ -1903,13 +1966,16 @@ input[type="range"]::-webkit-slider-thumb:hover {
   left: 28px;
   right: 28px;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   pointer-events: none;
   z-index: 14;
 }
 
 .hud-pause-button {
+  position: absolute;
+  top: 0;
+  right: 0;
   background: transparent;
   border: none;
   color: #ffd91f;
