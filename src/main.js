@@ -90,7 +90,7 @@ const uiHtml = `
         <button class="btn dev-only-control" id="btn-toggle-jumpscare" style="margin-top: -5px; padding: 6px;">Jumpscare: Off</button>
         <div class="hotkey-list">
           <div class="hotkey-item"><span>Move</span> <span class="hotkey-key">WASD / Arrows</span></div>
-          <div class="hotkey-item"><span>Look Back</span> <span class="hotkey-key">Hold Space</span></div>
+          <div class="hotkey-item"><span>Look Around</span> <span class="hotkey-key">Q / E / Space</span></div>
           <div class="hotkey-item dev-only-control"><span>Swap</span> <span class="hotkey-key">Tab</span></div>
           <div class="hotkey-item"><span>Exit</span> <span class="hotkey-key">Esc</span></div>
         </div>
@@ -437,6 +437,7 @@ const uiHtml = `
         <h2 class="game-start-title">Controls</h2>
         <div class="game-start-commands">
           <div><span>Move</span><strong>WASD / Arrows</strong></div>
+          <div><span>Look left / right</span><strong>Hold Q / E</strong></div>
           <div><span>Look back</span><strong>Hold Space</strong></div>
           <div><span>Exit</span><strong>Esc</strong></div>
         </div>
@@ -782,6 +783,7 @@ const uiHtml = `
         <div class="pause-menu-controls" id="pause-controls-panel" style="display: none;">
           <div class="game-start-commands">
             <div><span>Move</span><strong>WASD / Arrows</strong></div>
+            <div><span>Look left / right</span><strong>Hold Q / E</strong></div>
             <div><span>Look back</span><strong>Hold Space</strong></div>
             <div><span>Exit</span><strong>Esc</strong></div>
           </div>
@@ -885,7 +887,9 @@ let pelletManager = new PelletManager(gameMaze);
 let isGameMode = false;
 let isGameStartOverlayActive = false;
 let isGameLookBackActive = false;
-let previousGameLookBackState = false;
+let isGameLookLeftActive = false;
+let isGameLookRightActive = false;
+let previousGameLookMode = 'forward';
 let isJumpscareMode = false;
 let areCaptureCollisionsEnabled = true;
 let captureResolveTimer = 0;
@@ -1123,6 +1127,29 @@ function rotateFlatVectorToward(current, desired, maxRadians) {
   const step = THREE.MathUtils.clamp(angle, -maxRadians, maxRadians);
 
   return from.applyAxisAngle(new THREE.Vector3(0, 1, 0), step).normalize();
+}
+
+function getGameLookMode() {
+  if (isGameLookBackActive) return 'back';
+  if (isGameLookLeftActive && !isGameLookRightActive) return 'left';
+  if (isGameLookRightActive && !isGameLookLeftActive) return 'right';
+  return 'forward';
+}
+
+function resetGameLookControls() {
+  isGameLookBackActive = false;
+  isGameLookLeftActive = false;
+  isGameLookRightActive = false;
+  previousGameLookMode = 'forward';
+}
+
+function getSideLookDirection(forward, lookMode) {
+  const angle = lookMode === 'left' ? Math.PI / 2 : -Math.PI / 2;
+  return forward.clone().setY(0).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+}
+
+function getGameCameraSidePoint(distanceFromPacman, lookDirection) {
+  return activeController.getCameraTarget().addScaledVector(lookDirection, -distanceFromPacman);
 }
 
 function getGameCameraRailPoint(distanceBehind, fallbackForward, lookBack = false) {
@@ -2612,8 +2639,7 @@ function resetGameCharactersToSpawn(snapCamera = true) {
     entry.powerState.recoveringFromEaten = false;
   });
 
-  isGameLookBackActive = false;
-  previousGameLookBackState = false;
+  resetGameLookControls();
   gameCameraState.isReversing = false;
   gameCameraState.reversalTimer = 0;
   gameCameraState.reverseSnapFramesRemaining = 0;
@@ -2655,8 +2681,7 @@ function startPacmanCaptureResolve() {
   if (gamePacman?.playDeathAnimation) {
     gamePacman.playDeathAnimation(PACMAN_CAPTURE_RESOLVE_DURATION);
   }
-  isGameLookBackActive = false;
-  previousGameLookBackState = false;
+  resetGameLookControls();
   gameCameraState.isReversing = false;
   gameCameraState.reversalTimer = 0;
   gameCameraState.reverseSnapFramesRemaining = 0;
@@ -2990,8 +3015,7 @@ function enterGameMode(options = {}) {
 
   isGameMode = true;
   isGameStartOverlayActive = false;
-  isGameLookBackActive = false;
-  previousGameLookBackState = false;
+  resetGameLookControls();
   isJumpscareMode = Boolean(options.jumpscare);
   isCountdownActive = false;
   isGamePaused = false;
@@ -3087,8 +3111,7 @@ function exitGameMode() {
   hidePauseOverlay();
   clearFloatingScores();
   setGameStartOverlayVisible(false);
-  isGameLookBackActive = false;
-  previousGameLookBackState = false;
+  resetGameLookControls();
   isJumpscareMode = false;
   forEachGhost((entry) => entry.ai.setEnabled(false));
   captureResolveTimer = 0;
@@ -3800,7 +3823,7 @@ function getGameInputIntent(key) {
 }
 
 function beginGameCameraReverseDelay() {
-  if (isGameLookBackActive || gameCameraState.isReversing) return;
+  if (getGameLookMode() !== 'forward' || gameCameraState.isReversing) return;
 
   gameCameraState.isReversing = true;
   gameCameraState.reverseHoldForward.copy(gameCameraState.forward);
@@ -3811,13 +3834,15 @@ function updateGameCamera(deltaTime, snap = false) {
   if (!activeController) return;
 
   const target = activeController.getCameraTarget();
+  const lookMode = getGameLookMode();
+  const followForward = activeController.getFollowDirection();
 
-  const desiredForward = activeController.getFollowDirection()
-    .multiplyScalar(isGameLookBackActive ? -1 : 1);
-  const lookBackChanged = isGameLookBackActive !== previousGameLookBackState;
+  const desiredForward = followForward.clone()
+    .multiplyScalar(lookMode === 'back' ? -1 : 1);
+  const lookModeChanged = lookMode !== previousGameLookMode;
   
   let isCameraInReverseState = false;
-  let forceSnapThisFrame = snap || lookBackChanged;
+  let forceSnapThisFrame = snap || lookModeChanged;
 
   if (forceSnapThisFrame) {
     gameCameraState.isReversing = false;
@@ -3857,16 +3882,19 @@ function updateGameCamera(deltaTime, snap = false) {
     }
   }
 
-  previousGameLookBackState = isGameLookBackActive;
+  previousGameLookMode = lookMode;
 
   // If we are looking back OR we are in the middle of a reversal delay, we want the camera IN FRONT of Pacman
-  const effectivelyLookingBack = isGameLookBackActive || isCameraInReverseState;
+  const effectivelyLookingBack = lookMode === 'back' || isCameraInReverseState;
 
-  const desiredPosition = isCameraInReverseState
+  let desiredPosition = isCameraInReverseState
     ? target.clone()
       .addScaledVector(gameCameraState.reverseHoldForward, -GAME_CAMERA_DISTANCE)
       .add(new THREE.Vector3(0, GAME_CAMERA_HEIGHT, 0))
-    : effectivelyLookingBack
+    : lookMode === 'left' || lookMode === 'right'
+      ? getGameCameraSidePoint(GAME_CAMERA_DISTANCE, getSideLookDirection(followForward, lookMode))
+        .add(new THREE.Vector3(0, GAME_CAMERA_HEIGHT, 0))
+      : effectivelyLookingBack
       ? getGameCameraRailPoint(GAME_CAMERA_DISTANCE, gameCameraState.forward, true)
         .add(new THREE.Vector3(0, GAME_CAMERA_HEIGHT, 0))
       : getGameCameraRailPoint(GAME_CAMERA_DISTANCE, gameCameraState.forward, false)
@@ -3880,9 +3908,18 @@ function updateGameCamera(deltaTime, snap = false) {
     centeredForward.copy(gameCameraState.forward);
   }
 
-  const desiredTarget = effectivelyLookingBack
-    ? target.clone().add(new THREE.Vector3(0, GAME_CAMERA_TARGET_HEIGHT, 0))
-    : anchoredTarget.clone().addScaledVector(centeredForward, GAME_CAMERA_CENTERED_LOOK_AHEAD);
+  let desiredTarget = anchoredTarget.clone().addScaledVector(centeredForward, GAME_CAMERA_CENTERED_LOOK_AHEAD);
+  if (effectivelyLookingBack) {
+    desiredTarget = target.clone().add(new THREE.Vector3(0, GAME_CAMERA_TARGET_HEIGHT, 0));
+  } else if (lookMode === 'left' || lookMode === 'right') {
+    const sideLookDirection = getSideLookDirection(followForward, lookMode);
+    desiredTarget = desiredPosition.clone().addScaledVector(
+      sideLookDirection,
+      GAME_CAMERA_DISTANCE
+    );
+    desiredTarget.addScaledVector(sideLookDirection, GAME_CAMERA_CENTERED_LOOK_AHEAD);
+    desiredTarget.y = anchoredTarget.y;
+  }
 
   if (forceSnapThisFrame) {
     gameCameraState.position.copy(desiredPosition);
@@ -4489,6 +4526,18 @@ window.addEventListener('keydown', (e) => {
       return;
     }
 
+    if (key === 'q') {
+      e.preventDefault();
+      isGameLookLeftActive = true;
+      return;
+    }
+
+    if (key === 'e') {
+      e.preventDefault();
+      isGameLookRightActive = true;
+      return;
+    }
+
     const gameIntent = getGameInputIntent(key);
 
     if (gameIntent) {
@@ -4612,8 +4661,18 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => {
   if (!isGameMode) return;
 
-  if (e.key === ' ') {
+  const key = e.key.toLowerCase();
+
+  if (key === ' ') {
     isGameLookBackActive = false;
+  }
+
+  if (key === 'q') {
+    isGameLookLeftActive = false;
+  }
+
+  if (key === 'e') {
+    isGameLookRightActive = false;
   }
 });
 
