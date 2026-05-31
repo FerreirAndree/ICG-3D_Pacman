@@ -3,9 +3,9 @@ import { TILE_SIZE } from './mazePieces.js';
 
 const DEFAULT_DECISION_LEAD_DISTANCE = 4.5;
 const DEFAULT_AI_PROFILE = 'direct';
-const PINKY_LOOKAHEAD_TILES = 4;
+const PINKY_LOOKAHEAD_TILES = 3;
 const INKY_LOOKAHEAD_TILES = 2;
-const CLYDE_SHY_DISTANCE_TILES = 8;
+const CLYDE_SHY_DISTANCE_TILES = 3;
 const CLYDE_SCATTER_OFFSET_TILES = 8;
 
 export class GhostAIController {
@@ -55,7 +55,7 @@ export class GhostAIController {
     this.lastDecisionNodeId = null;
   }
 
-  update({ ghostController, pacman, ghost, canGhostBeEaten, isGhostRespawning, ghosts = [] }) {
+  update({ ghostController, pacman, ghost, scatterTarget, canGhostBeEaten, isGhostRespawning, ghosts = [] }) {
     if (!this.enabled || !ghostController || !pacman || isGhostRespawning) return;
 
     const context = this.getDecisionContext(ghostController);
@@ -64,6 +64,7 @@ export class GhostAIController {
     const targetPosition = this.getTargetPosition({
       pacman,
       ghost,
+      scatterTarget,
       ghostController,
       ghosts,
       fleeing: canGhostBeEaten(ghost)
@@ -81,7 +82,7 @@ export class GhostAIController {
     this.lastDecisionNodeId = context.node.id;
   }
 
-  getTargetPosition({ pacman, ghost, ghosts }) {
+  getTargetPosition({ pacman, ghost, scatterTarget, ghosts }) {
     if (this.profile === 'ambush') {
       return this.getPacmanLookaheadPosition(pacman, PINKY_LOOKAHEAD_TILES);
     }
@@ -91,7 +92,7 @@ export class GhostAIController {
     }
 
     if (this.profile === 'shy') {
-      return this.getShyTargetPosition({ pacman, ghost });
+      return this.getShyTargetPosition({ pacman, ghost, scatterTarget });
     }
 
     return pacman.position;
@@ -122,7 +123,7 @@ export class GhostAIController {
       .add(blinky.model.position);
   }
 
-  getShyTargetPosition({ pacman, ghost }) {
+  getShyTargetPosition({ pacman, ghost, scatterTarget }) {
     if (!ghost) return pacman.position;
 
     const shyDistance = TILE_SIZE * CLYDE_SHY_DISTANCE_TILES;
@@ -130,7 +131,7 @@ export class GhostAIController {
       return pacman.position;
     }
 
-    return pacman.position.clone().add(new (pacman.position.constructor)(
+    return scatterTarget || pacman.position.clone().add(new (pacman.position.constructor)(
       -TILE_SIZE * CLYDE_SCATTER_OFFSET_TILES,
       0,
       TILE_SIZE * CLYDE_SCATTER_OFFSET_TILES

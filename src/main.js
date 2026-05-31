@@ -1837,6 +1837,7 @@ function updateGhostAi() {
       ghostController: entry.controller,
       pacman: gamePacman,
       ghost: entry.model,
+      scatterTarget: entry.scatterTarget,
       ghosts: gameGhosts,
       canGhostBeEaten,
       isGhostRespawning: isGhostRespawning(entry)
@@ -1941,6 +1942,7 @@ function createGameGhostEntry(definition, graph) {
   return {
     id: definition.id,
     definition,
+    scatterTarget: getGhostScatterTarget(definition.id, graph),
     model,
     controller: new EntityController(model, graph, {
       speed: GHOST_NORMAL_SPEED,
@@ -1964,6 +1966,33 @@ function createGameGhostEntry(definition, graph) {
     spawnState: null,
     respawnTimer: 0
   };
+}
+
+function getGhostScatterTarget(ghostId, graph) {
+  const tiles = Array.from(graph.tiles.values());
+  if (tiles.length === 0) return new THREE.Vector3();
+
+  const bounds = tiles.reduce((acc, tile) => ({
+    minX: Math.min(acc.minX, tile.position.x),
+    maxX: Math.max(acc.maxX, tile.position.x),
+    minZ: Math.min(acc.minZ, tile.position.z),
+    maxZ: Math.max(acc.maxZ, tile.position.z)
+  }), {
+    minX: Infinity,
+    maxX: -Infinity,
+    minZ: Infinity,
+    maxZ: -Infinity
+  });
+
+  const cornerByGhost = {
+    blinky: [bounds.maxX, bounds.minZ],
+    pinky: [bounds.minX, bounds.minZ],
+    inky: [bounds.maxX, bounds.maxZ],
+    clyde: [bounds.minX, bounds.maxZ]
+  };
+  const [x, z] = cornerByGhost[ghostId] || [bounds.minX, bounds.maxZ];
+
+  return new THREE.Vector3(x, 2, z);
 }
 
 function loadUserMaps() {
