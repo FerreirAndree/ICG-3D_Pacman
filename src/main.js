@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { buildShowcase, showcaseLayout, createMazePiece, createPedestal, TILE_SIZE, PIECE_CONNECTORS } from './mazePieces.js';
 import { createPacman, createGhost, createPellet, createStandardPellet } from './entities.js';
-import { buildMazeGraph, DIRECTIONS, EXPERIMENTAL_GAME_MAP, getAbsoluteDirections as getGraphAbsoluteDirections } from './mazeGraph.js';
+import { buildMazeGraph, DEFAULT_GAME_MAP, DIRECTIONS, STARTER_GRID_MAP, getAbsoluteDirections as getGraphAbsoluteDirections } from './mazeGraph.js';
 import { EntityController } from './pacmanController.js';
 import { PelletManager, PELLET_TYPES } from './pelletManager.js';
 import { GhostAIController } from './ghostAIController.js';
@@ -913,7 +913,7 @@ const BUILT_IN_MAPS = [
     id: 'classic',
     name: 'Classic',
     description: 'Default glass-pipe maze',
-    source: EXPERIMENTAL_GAME_MAP
+    source: DEFAULT_GAME_MAP
   }
 ];
 
@@ -1997,7 +1997,21 @@ function getGhostScatterTarget(ghostId, graph) {
 
 function loadUserMaps() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(USER_MAP_STORAGE_KEY) || '[]');
+    const savedMaps = localStorage.getItem(USER_MAP_STORAGE_KEY);
+    if (savedMaps === null) {
+      const starterMaps = [
+        {
+          id: 'user-grid',
+          name: 'Grid',
+          source: STARTER_GRID_MAP,
+          updatedAt: Date.now()
+        }
+      ];
+      localStorage.setItem(USER_MAP_STORAGE_KEY, JSON.stringify(starterMaps));
+      return starterMaps;
+    }
+
+    const parsed = JSON.parse(savedMaps || '[]');
     if (!Array.isArray(parsed)) return [];
 
     return parsed

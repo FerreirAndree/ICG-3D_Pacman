@@ -36,8 +36,9 @@ export const DIRECTION_YAW = {
   west: -Math.PI / 2
 };
 
-import EXPERIMENTAL_GAME_MAP from '../maps/test3.json';
-export { EXPERIMENTAL_GAME_MAP };
+import DEFAULT_GAME_MAP from '../maps/medium_map.json';
+import STARTER_GRID_MAP from '../maps/grid.json';
+export { DEFAULT_GAME_MAP, STARTER_GRID_MAP };
 
 export function makeTileKey(x, z) {
   return `${Math.round(x)},${Math.round(z)}`;
