@@ -419,6 +419,18 @@ const uiHtml = `
         </radialGradient>
       </defs>
     </svg>
+    <div class="game-hud-header">
+      <div class="hud-score-inline">
+        <span class="hud-score-title">SCORE:</span>
+        <span class="hud-score-val" id="hud-score-value">0</span>
+      </div>
+      <button class="hud-pause-button" id="btn-hud-pause" type="button" aria-label="Pause game">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <rect x="5" y="4" width="4" height="16" rx="1" />
+          <rect x="15" y="4" width="4" height="16" rx="1" />
+        </svg>
+      </button>
+    </div>
     <div class="game-hud-lives" id="game-hud-lives"></div>
     <div class="game-start-overlay" id="game-start-overlay" aria-hidden="true">
       <div class="game-start-modal">
@@ -429,6 +441,229 @@ const uiHtml = `
           <div><span>Exit</span><strong>Esc</strong></div>
         </div>
         <button class="game-start-button" id="btn-game-start" type="button">Start</button>
+      </div>
+    </div>
+    <div class="game-countdown-overlay" id="game-countdown-overlay" aria-hidden="true">
+      <div class="countdown-text" id="game-countdown-text">READY</div>
+    </div>
+    <div class="game-hud-overlay game-status-overlay game-over-overlay" id="game-over-overlay" aria-hidden="true">
+      <div class="pause-menu-content">
+        <div class="game-over-title">
+          <div class="logo-word">
+            <span class="logo-letter">
+              <svg viewBox="0 0 847 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M401 700L83 700L83 0L401 0Q515 0 602 43.50Q689 87 738 165.50Q787 244 787 350Q787 456 738 534.50Q689 613 602 656.50Q515 700 401 700M245 133L245 567L393 567Q463 567 514.50 540.50Q566 514 594.50 465.50Q623 417 623 350Q623 283 594.50 234.50Q566 186 514.50 159.50Q463 133 393 133" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 660 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0 L600 0 L600 133 L245 133 L245 285 L500 285 L500 415 L245 415 L245 567 L600 567 L600 700 L83 700 Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 660 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0 L600 0 L600 133 L245 133 L245 285 L500 285 L500 415 L245 415 L245 700 L83 700 Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 660 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0 L600 0 L600 133 L245 133 L245 285 L500 285 L500 415 L245 415 L245 567 L600 567 L600 700 L83 700 Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 826 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M383 0L766 700L0 700ZM383 380L465 530L301 530Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 660 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0 L600 0 L600 133 L422 133 L422 700 L260 700 L260 133 L83 133 Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 660 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0 L600 0 L600 133 L245 133 L245 285 L500 285 L500 415 L245 415 L245 567 L600 567 L600 700 L83 700 Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 847 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M401 700L83 700L83 0L401 0Q515 0 602 43.50Q689 87 738 165.50Q787 244 787 350Q787 456 738 534.50Q689 613 602 656.50Q515 700 401 700M245 133L245 567L393 567Q463 567 514.50 540.50Q566 514 594.50 465.50Q623 417 623 350Q623 283 594.50 234.50Q566 186 514.50 159.50Q463 133 393 133" />
+                </g>
+              </svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="game-over-score-display">
+          SCORE: <span id="game-over-score">0</span>
+        </div>
+
+        <div class="pause-menu-actions" style="margin-top: 12px;">
+          <button class="landing-action btn-red" id="btn-game-over-retry" type="button">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 4v6h-6"></path>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+            <span>Try Again</span>
+          </button>
+          <button class="landing-action btn-blue" id="btn-game-over-menu" type="button">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+            <span>Main Menu</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="game-hud-overlay game-status-overlay" id="game-victory-overlay" aria-hidden="true">
+      <div class="game-status-modal game-victory-modal">
+        <p class="status-modal-eyebrow">VICTORY</p>
+        <h2 class="status-modal-title">LEVEL COMPLETE</h2>
+        <div class="status-modal-stats">
+          <div class="status-stat-row">
+            <span>Final Score</span>
+            <strong id="game-victory-score">0</strong>
+          </div>
+          <div class="status-stat-row">
+            <span>Pellets Eaten</span>
+            <strong id="game-victory-pellets">0</strong>
+          </div>
+        </div>
+        <div class="status-modal-actions">
+          <button class="status-btn btn-victory-retry" id="btn-game-victory-retry" type="button">PLAY AGAIN</button>
+          <button class="status-btn btn-menu" id="btn-game-victory-menu" type="button">MAIN MENU</button>
+        </div>
+      </div>
+    </div>
+    <div class="game-hud-overlay game-pause-overlay" id="game-pause-overlay" aria-hidden="true">
+      <div class="pause-menu-content">
+        <div class="game-paused-title">
+          <div class="logo-word">
+            <span class="logo-letter">
+              <svg viewBox="0 0 710 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M650 0 L83 0 L83 700 L650 700 L650 350 L380 350 L380 483 L488 483 L488 567 L245 567 L245 133 L650 133 Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 826 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M383 0L766 700L0 700ZM383 380L465 530L301 530Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 1015 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M235 700L83 700L83 0L217 0L479 435L737 0L870 0L872 700L720 700L719 281L513 626L440 626L235 288" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 660 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0 L600 0 L600 133 L245 133 L245 285 L500 285 L500 415 L245 415 L245 567 L600 567 L600 700 L83 700 Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter-space"></span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 792 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M245 700L83 700L83 0L386 0Q479 0 547.50 30.50Q616 61 653 118Q690 175 690 254Q690 332 653 389Q616 446 547.50 476.50Q479 507 386 507L245 507L245 700M245 132L245 375L377 375Q451 375 488.50 343Q526 311 526 254Q526 196 488.50 164Q451 132 377 132" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 826 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M383 0L766 700L0 700ZM383 380L465 530L301 530Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 710 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0 L83 700 L650 700 L650 0 L488 0 L488 567 L245 567 L245 0 Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 710 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0 L650 0 L650 133 L245 133 L245 285 L650 285 L650 700 L83 700 L83 567 L488 567 L488 415 L83 415 Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 660 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M83 0 L600 0 L600 133 L245 133 L245 285 L500 285 L500 415 L245 415 L245 567 L600 567 L600 700 L83 700 Z" />
+                </g>
+              </svg>
+            </span>
+            <span class="logo-letter">
+              <svg viewBox="0 0 847 760">
+                <g transform="translate(30, 30)">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="26" d="M401 700L83 700L83 0L401 0Q515 0 602 43.50Q689 87 738 165.50Q787 244 787 350Q787 456 738 534.50Q689 613 602 656.50Q515 700 401 700M245 133L245 567L393 567Q463 567 514.50 540.50Q566 514 594.50 465.50Q623 417 623 350Q623 283 594.50 234.50Q566 186 514.50 159.50Q463 133 393 133" />
+                </g>
+              </svg>
+            </span>
+          </div>
+        </div>
+        <div class="pause-menu-actions" id="pause-main-actions">
+          <button class="landing-action btn-yellow" id="btn-game-pause-resume" type="button">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M13 3C15.1523 3 17.1281 3.7555 18.6768 5.01576L20.124 6.46299L18.8288 7.75818L18.828 7.75738L14.5854 12L18.2236 15.6383L18.2224 15.6396L20.1273 17.5445L18.7144 18.9575L18.7122 18.9553C17.1583 20.2329 15.1687 21 13 21C8.02944 21 4 16.9706 4 12C4 7.02944 8.02944 3 13 3ZM11.7569 12L17.2893 17.5323C16.1044 18.4523 14.6162 19 13 19C9.13401 19 6 15.866 6 12C6 8.13401 9.13401 5 13 5C14.6162 5 16.1045 5.54772 17.2893 6.46768L11.7569 12Z" fill="currentColor"/>
+            </svg>
+            <span>Resume</span>
+          </button>
+          <button class="landing-action btn-blue" id="btn-game-pause-controls" type="button">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
+              <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01"></path>
+              <path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"></path>
+              <path d="M7 16h10"></path>
+            </svg>
+            <span>Controls</span>
+          </button>
+          <button class="landing-action btn-blue" id="btn-game-pause-menu" type="button">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+            <span>Main Menu</span>
+          </button>
+        </div>
+        <div class="pause-menu-controls" id="pause-controls-panel" style="display: none;">
+          <div class="game-start-commands">
+            <div><span>Move</span><strong>WASD / Arrows</strong></div>
+            <div><span>Look back</span><strong>Hold Space</strong></div>
+            <div><span>Exit</span><strong>Esc</strong></div>
+          </div>
+          <button class="landing-action btn-yellow" id="btn-game-pause-controls-back" type="button" style="margin-top: 24px;">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            <span>Back</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -529,6 +764,10 @@ let livesRemaining = 3;
 let isGameOver = false;
 let isLevelComplete = false;
 let score = 0;
+let isCountdownActive = false;
+let countdownTimer = 0;
+const COUNTDOWN_DURATION = 2.0;
+let isGamePaused = false;
 let powerPelletTimer = 0;
 let activePowerPelletDuration = 0;
 let ghostsEatenThisPower = 0;
@@ -853,6 +1092,131 @@ function updateScoreUi() {
   if (scoreCounter) {
     scoreCounter.textContent = score;
   }
+  const hudScore = document.querySelector('#hud-score-value');
+  if (hudScore) {
+    hudScore.textContent = score;
+  }
+}
+
+function startCountdown() {
+  const isDevMode = appContainer.classList.contains('dev-tools-active');
+  if (isDevMode) return;
+
+  isCountdownActive = true;
+  countdownTimer = COUNTDOWN_DURATION;
+  updateCountdownUi();
+}
+
+function updateCountdown(deltaTime) {
+  if (!isCountdownActive) return;
+
+  countdownTimer = Math.max(0, countdownTimer - deltaTime);
+  updateCountdownUi();
+
+  if (countdownTimer <= 0) {
+    isCountdownActive = false;
+    hideCountdownUi();
+  }
+}
+
+function updateCountdownUi() {
+  const overlay = document.querySelector('#game-countdown-overlay');
+  const text = document.querySelector('#game-countdown-text');
+  if (!overlay || !text) return;
+
+  overlay.classList.add('active');
+  overlay.setAttribute('aria-hidden', 'false');
+
+  if (countdownTimer > 1.0) {
+    overlay.className = 'game-countdown-overlay active countdown-ready';
+    text.textContent = 'READY';
+  } else if (countdownTimer > 0.0) {
+    overlay.className = 'game-countdown-overlay active countdown-go';
+    text.textContent = 'GO!';
+  }
+}
+
+function hideCountdownUi() {
+  const overlay = document.querySelector('#game-countdown-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    overlay.className = 'game-countdown-overlay';
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function showGameOverOverlay() {
+  const overlay = document.querySelector('#game-over-overlay');
+  if (!overlay) return;
+
+  const scoreEl = document.querySelector('#game-over-score');
+  if (scoreEl) scoreEl.textContent = score;
+
+  overlay.classList.add('active');
+  overlay.setAttribute('aria-hidden', 'false');
+
+  const pauseBtn = document.querySelector('#btn-hud-pause');
+  if (pauseBtn) pauseBtn.style.display = 'none';
+}
+
+function hideGameOverOverlay() {
+  const overlay = document.querySelector('#game-over-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function showVictoryOverlay() {
+  const overlay = document.querySelector('#game-victory-overlay');
+  if (!overlay) return;
+
+  document.querySelector('#game-victory-score').textContent = score;
+  document.querySelector('#game-victory-pellets').textContent = pelletManager ? pelletManager.getEatenCount() : 0;
+
+  overlay.classList.add('active');
+  overlay.setAttribute('aria-hidden', 'false');
+
+  const pauseBtn = document.querySelector('#btn-hud-pause');
+  if (pauseBtn) pauseBtn.style.display = 'none';
+}
+
+function hideVictoryOverlay() {
+  const overlay = document.querySelector('#game-victory-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function showPauseOverlay() {
+  const overlay = document.querySelector('#game-pause-overlay');
+  if (!overlay) return;
+
+  isGamePaused = true;
+  overlay.classList.add('active');
+  overlay.setAttribute('aria-hidden', 'false');
+
+  // Reset controls panels state to show main actions first
+  const mainActions = document.querySelector('#pause-main-actions');
+  const controlsPanel = document.querySelector('#pause-controls-panel');
+  if (mainActions) mainActions.style.display = 'flex';
+  if (controlsPanel) controlsPanel.style.display = 'none';
+
+  const pauseBtn = document.querySelector('#btn-hud-pause');
+  if (pauseBtn) pauseBtn.style.display = 'none';
+}
+
+function hidePauseOverlay() {
+  const overlay = document.querySelector('#game-pause-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+  isGamePaused = false;
+
+  const pauseBtn = document.querySelector('#btn-hud-pause');
+  if (pauseBtn) pauseBtn.style.display = '';
 }
 
 function getPelletScore(pelletType) {
@@ -2014,6 +2378,9 @@ function finishPacmanCaptureResolve() {
 
   if (!isGameOver) {
     resetGameCharactersToSpawn(true);
+    startCountdown();
+  } else {
+    showGameOverOverlay();
   }
 }
 
@@ -2021,6 +2388,7 @@ function completeLevel() {
   isLevelComplete = true;
   captureResolveTimer = 0;
   updateLivesUi();
+  showVictoryOverlay();
 }
 
 function restartGameRun() {
@@ -2038,6 +2406,7 @@ function restartGameRun() {
   updateLivesUi();
   updateScoreUi();
   resetGameCharactersToSpawn(true);
+  startCountdown();
 }
 
 function rebuildGameRun() {
@@ -2311,6 +2680,16 @@ function setGameStartOverlayVisible(visible) {
 
   overlay.classList.toggle('active', isGameStartOverlayActive);
   overlay.setAttribute('aria-hidden', isGameStartOverlayActive ? 'false' : 'true');
+
+  const pauseBtn = document.querySelector('#btn-hud-pause');
+  if (pauseBtn) {
+    pauseBtn.style.display = isGameStartOverlayActive ? 'none' : '';
+  }
+
+  // Trigger countdown when closing start overlay
+  if (!isGameStartOverlayActive && isGameMode) {
+    startCountdown();
+  }
 }
 
 function enterGameMode(options = {}) {
@@ -2322,6 +2701,18 @@ function enterGameMode(options = {}) {
   isGameLookBackActive = false;
   previousGameLookBackState = false;
   isJumpscareMode = Boolean(options.jumpscare);
+  isCountdownActive = false;
+  isGamePaused = false;
+  hideCountdownUi();
+  hideGameOverOverlay();
+  hideVictoryOverlay();
+  hidePauseOverlay();
+
+  const pauseBtn = document.querySelector('#btn-hud-pause');
+  if (pauseBtn) {
+    pauseBtn.style.display = !isDevMode ? 'none' : '';
+  }
+
   if (Number.isInteger(requestedGhostCount)) {
     activeGhostCount = THREE.MathUtils.clamp(requestedGhostCount, 1, GHOST_DEFINITIONS.length);
   }
@@ -2395,6 +2786,12 @@ function exitGameMode() {
   if (!isGameMode) return;
 
   isGameMode = false;
+  isCountdownActive = false;
+  isGamePaused = false;
+  hideCountdownUi();
+  hideGameOverOverlay();
+  hideVictoryOverlay();
+  hidePauseOverlay();
   setGameStartOverlayVisible(false);
   isGameLookBackActive = false;
   previousGameLookBackState = false;
@@ -3363,6 +3760,56 @@ document.querySelector('#editor-save-modal').addEventListener('click', (event) =
   }
 });
 
+// --- Overlay Event Listeners ---
+document.querySelector('#btn-game-over-retry').addEventListener('click', () => {
+  hideGameOverOverlay();
+  restartGameRun();
+});
+
+document.querySelector('#btn-game-over-menu').addEventListener('click', () => {
+  hideGameOverOverlay();
+  navigateTo('/menu');
+});
+
+document.querySelector('#btn-game-victory-retry').addEventListener('click', () => {
+  hideVictoryOverlay();
+  restartGameRun();
+});
+
+document.querySelector('#btn-game-victory-menu').addEventListener('click', () => {
+  hideVictoryOverlay();
+  navigateTo('/menu');
+});
+
+document.querySelector('#btn-game-pause-resume').addEventListener('click', () => {
+  hidePauseOverlay();
+});
+
+document.querySelector('#btn-game-pause-controls').addEventListener('click', () => {
+  const mainActions = document.querySelector('#pause-main-actions');
+  const controlsPanel = document.querySelector('#pause-controls-panel');
+  if (mainActions) mainActions.style.display = 'none';
+  if (controlsPanel) controlsPanel.style.display = 'flex';
+});
+
+document.querySelector('#btn-game-pause-controls-back').addEventListener('click', () => {
+  const controlsPanel = document.querySelector('#pause-controls-panel');
+  const mainActions = document.querySelector('#pause-main-actions');
+  if (controlsPanel) controlsPanel.style.display = 'none';
+  if (mainActions) mainActions.style.display = 'flex';
+});
+
+document.querySelector('#btn-game-pause-menu').addEventListener('click', () => {
+  hidePauseOverlay();
+  navigateTo('/menu');
+});
+
+document.querySelector('#btn-hud-pause').addEventListener('click', (e) => {
+  e.target.blur();
+  if (!isGameMode || isGamePaused || isGameOver || isLevelComplete) return;
+  showPauseOverlay();
+});
+
 registerRoutes({
   '/menu': {
     enter: enterMenuScreen,
@@ -3702,15 +4149,32 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (isGameMode) {
+    if (isGamePaused) {
+      if (key === 'escape' || key === 'p') {
+        e.preventDefault();
+        hidePauseOverlay();
+      }
+      return;
+    }
+
+    // Toggle pause with Escape or P key if game is not paused and not game over/level complete.
+    if ((key === 'escape' || key === 'p') && !(isGameOver || isLevelComplete)) {
+      e.preventDefault();
+      showPauseOverlay();
+      return;
+    }
+
     if (isGameStartOverlayActive) {
-      if (key === 'escape') {
-        navigateTo('/menu');
-      } else if (key === 'enter' || key === ' ') {
+      if (key === 'enter' || key === ' ') {
         e.preventDefault();
         setGameStartOverlayVisible(false);
       } else {
         e.preventDefault();
       }
+      return;
+    }
+
+    if (isCountdownActive) {
       return;
     }
 
@@ -3722,9 +4186,6 @@ window.addEventListener('keydown', (e) => {
     }
 
     if (isCaptureResolving()) {
-      if (key === 'escape') {
-        navigateTo('/menu');
-      }
       return;
     }
 
@@ -4392,7 +4853,14 @@ function animate() {
   }
 
   if (isGameMode && activeController) {
-    if (isGameStartOverlayActive) {
+    if (isGamePaused) {
+      if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime, deltaTime);
+      forEachGhost((entry) => {
+        if (entry.model.visible && entry.model.userData.update) entry.model.userData.update(elapsedTime);
+      });
+      pelletManager.update(elapsedTime);
+      updateGameCamera(deltaTime, false);
+    } else if (isGameStartOverlayActive) {
       if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime, deltaTime);
       forEachGhost((entry) => {
         if (entry.model.visible && entry.model.userData.update) entry.model.userData.update(elapsedTime);
@@ -4407,6 +4875,14 @@ function animate() {
       pelletManager.update(elapsedTime);
       updatePowerPelletState(deltaTime);
       updateGhostRespawn(deltaTime);
+      updateGameCamera(deltaTime, false);
+    } else if (isCountdownActive) {
+      updateCountdown(deltaTime);
+      if (gamePacman?.userData.update) gamePacman.userData.update(elapsedTime, deltaTime);
+      forEachGhost((entry) => {
+        if (entry.model.visible && entry.model.userData.update) entry.model.userData.update(elapsedTime);
+      });
+      pelletManager.update(elapsedTime);
       updateGameCamera(deltaTime, false);
     } else if (isCaptureResolving()) {
       captureResolveTimer = Math.max(0, captureResolveTimer - deltaTime);
