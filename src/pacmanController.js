@@ -565,9 +565,6 @@ export class EntityController {
       return;
     }
 
-    this.desiredDirection = null;
-    this.desiredIntent = null;
-
     if (forcedEdge) {
       this.startEdge(forcedEdge);
       return;
@@ -581,6 +578,8 @@ export class EntityController {
       }
     }
 
+    this.desiredDirection = null;
+    this.desiredIntent = null;
     this.currentDirection = null;
     this.isMoving = false;
   }
