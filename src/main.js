@@ -836,6 +836,7 @@ let isGamePaused = false;
 let powerPelletTimer = 0;
 let activePowerPelletDuration = 0;
 let ghostsEatenThisPower = 0;
+let activeFloatingScores = [];
 let activeGhostCount = 4;
 let currentGameGraph = null;
 let selectedGameMapId = 'classic';
@@ -1329,6 +1330,98 @@ function addGhostScore() {
   updateScoreUi();
 }
 
+function createFloatingScore(value, position) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  // Retro bold fonts with cyan neon glow
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 14;
+  ctx.lineWidth = 7;
+  
+  ctx.font = "bold 82px 'Century Gothic', Futura, sans-serif";
+  
+  // Neon cyan stroke
+  ctx.strokeStyle = '#00cccc';
+  ctx.strokeText(value, canvas.width / 2, canvas.height / 2);
+  
+  // Bright white-cyan core fill
+  ctx.shadowBlur = 4;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(value, canvas.width / 2, canvas.height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  
+  const spriteMaterial = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true
+  });
+  
+  const sprite = new THREE.Sprite(spriteMaterial);
+  sprite.position.copy(position);
+  sprite.position.y += 0.8; // Stand higher than ghost/pacman
+  
+  // Initial tiny scale for pop animation
+  sprite.scale.set(0.1, 0.05, 1);
+  
+  scene.add(sprite);
+  
+  activeFloatingScores.push({
+    sprite: sprite,
+    age: 0,
+    duration: 1.2,
+    speed: 1.8,
+    targetWidth: 1.8,
+    targetHeight: 0.9
+  });
+}
+
+function updateFloatingScores(deltaTime) {
+  for (let i = activeFloatingScores.length - 1; i >= 0; i--) {
+    const f = activeFloatingScores[i];
+    f.age += deltaTime;
+    if (f.age >= f.duration) {
+      scene.remove(f.sprite);
+      f.sprite.material.map.dispose();
+      f.sprite.material.dispose();
+      activeFloatingScores.splice(i, 1);
+    } else {
+      // Float up
+      f.sprite.position.y += f.speed * deltaTime;
+      
+      // Pop-in scale over first 0.15s, then hold
+      const scaleProgress = Math.min(1.0, f.age / 0.15);
+      f.sprite.scale.set(f.targetWidth * scaleProgress, f.targetHeight * scaleProgress, 1);
+      
+      // Fade out over last 0.6s
+      if (f.age > 0.6) {
+        const fadeProgress = (f.age - 0.6) / (f.duration - 0.6);
+        f.sprite.material.opacity = 1 - fadeProgress;
+      } else {
+        f.sprite.material.opacity = 1.0;
+      }
+    }
+  }
+}
+
+function clearFloatingScores() {
+  activeFloatingScores.forEach((f) => {
+    scene.remove(f.sprite);
+    f.sprite.material.map.dispose();
+    f.sprite.material.dispose();
+  });
+  activeFloatingScores = [];
+}
+
 function getPowerPelletDuration() {
   const tileCount = currentGameGraph?.tiles?.size ?? 0;
   return THREE.MathUtils.clamp(
@@ -1646,7 +1739,11 @@ function startGhostRespawnDelay(ghostOrEntry = getPrimaryGhostEntry()) {
   const state = getGhostPowerState(entry);
   if (state) state.eatenDuringCurrentPower = true;
   if (state) state.recoveringFromEaten = true;
+  
+  const ghostScoreValue = getNextGhostScore();
   addGhostScore();
+  createFloatingScore(ghostScoreValue, entry.model.position);
+  
   setGhostVulnerableVisual(entry.model, false);
   updateGhostMovementSpeed(entry);
   entry.respawnTimer = GHOST_RESPAWN_DELAY;
@@ -2488,6 +2585,7 @@ function restartGameRun() {
     entry.respawnTimer = 0;
   });
   clearPowerPelletState();
+  clearFloatingScores();
   pelletManager.reset();
   document.querySelector('#pellet-counter').textContent = pelletManager.getEatenCount();
   updateLivesUi();
@@ -2794,6 +2892,7 @@ function enterGameMode(options = {}) {
   hideGameOverOverlay();
   hideVictoryOverlay();
   hidePauseOverlay();
+  clearFloatingScores();
 
   const pauseBtn = document.querySelector('#btn-hud-pause');
   if (pauseBtn) {
@@ -2879,6 +2978,7 @@ function exitGameMode() {
   hideGameOverOverlay();
   hideVictoryOverlay();
   hidePauseOverlay();
+  clearFloatingScores();
   setGameStartOverlayVisible(false);
   isGameLookBackActive = false;
   previousGameLookBackState = false;
@@ -5051,6 +5151,9 @@ function animate() {
           startPacmanCaptureResolve();
         }
       }
+    }
+    if (!isGamePaused) {
+      updateFloatingScores(deltaTime);
     }
   }
 
