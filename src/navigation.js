@@ -1,3 +1,11 @@
+/**
+ * OpenAI. (2026). ChatGPT (GPT-5.5) [Large language model]. https://chat.openai.com
+ * Google. (2026). Gemini [Large language model]. https://gemini.google.com
+ *
+ * The lightweight route/navigation helpers in this file were co-authored with AI
+ * assistants to support the menu, editor, and game flow.
+ */
+
 let routes = {};
 let currentRoute = null;
 let fallbackRoute = '/menu';

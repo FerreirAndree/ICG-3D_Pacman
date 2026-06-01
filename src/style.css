@@ -1,4 +1,12 @@
 
+/**
+ * OpenAI. (2026). ChatGPT (GPT-5.5) [Large language model]. https://chat.openai.com
+ * Google. (2026). Gemini [Large language model]. https://gemini.google.com
+ *
+ * Parts of the visual styling, responsive layout, HUD, and menu polish in this
+ * stylesheet were co-authored with AI assistants for the Cyber-Pacman aesthetic.
+ */
+
 :root {
   color: #f3f7ff;
   background:

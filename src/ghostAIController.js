@@ -1,3 +1,11 @@
+/**
+ * OpenAI. (2026). ChatGPT (GPT-5.5) [Large language model]. https://chat.openai.com
+ * Google. (2026). Gemini [Large language model]. https://gemini.google.com
+ *
+ * The ghost targeting, frightened behavior, and controller profile logic in this
+ * file were co-authored with AI assistants for the Pacman-style AI system.
+ */
+
 import { OPPOSITE_DIRECTIONS, getDirectionVector } from './mazeGraph.js';
 import { TILE_SIZE } from './mazePieces.js';
 

@@ -1,3 +1,11 @@
+/**
+ * OpenAI. (2026). ChatGPT (GPT-5.5) [Large language model]. https://chat.openai.com
+ * Google. (2026). Gemini [Large language model]. https://gemini.google.com
+ *
+ * The pellet placement, rendering, and collision-management logic in this file
+ * were co-authored with AI assistants for the playable Pacman maze.
+ */
+
 import * as THREE from 'three';
 import { TILE_SIZE } from './mazePieces.js';
 import { createPellet } from './entities.js';

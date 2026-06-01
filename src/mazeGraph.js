@@ -1,3 +1,11 @@
+/**
+ * OpenAI. (2026). ChatGPT (GPT-5.5) [Large language model]. https://chat.openai.com
+ * Google. (2026). Gemini [Large language model]. https://gemini.google.com
+ *
+ * The maze graph construction and connector routing helpers in this file were
+ * co-authored with AI assistants for the 3D pipe-maze navigation system.
+ */
+
 import * as THREE from 'three';
 import { PIECE_CONNECTORS, TILE_SIZE } from './mazePieces.js';
 

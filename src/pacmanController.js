@@ -1,3 +1,11 @@
+/**
+ * OpenAI. (2026). ChatGPT (GPT-5.5) [Large language model]. https://chat.openai.com
+ * Google. (2026). Gemini [Large language model]. https://gemini.google.com
+ *
+ * The entity movement controller, route traversal, and camera trail logic in this
+ * file were co-authored with AI assistants for the 3D Pacman game engine.
+ */
+
 import * as THREE from 'three';
 import { TILE_SIZE } from './mazePieces.js';
 import { DIRECTION_YAW, DIRECTIONS, LEFT_DIRECTIONS, OPPOSITE_DIRECTIONS, RIGHT_DIRECTIONS, getAbsoluteDirections, getDirectionVector } from './mazeGraph.js';
